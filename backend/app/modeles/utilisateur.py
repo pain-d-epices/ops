@@ -38,10 +38,10 @@ class Utilisateur(Base, HorodatageMixin):
     tentatives_echouees: Mapped[int] = mapped_column(default=0, nullable=False)
     bloque_jusqua: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    appartenances: Mapped[list["Appartenance"]] = relationship(
+    appartenances: Mapped[list[Appartenance]] = relationship(
         back_populates="utilisateur", cascade="all, delete-orphan"
     )
-    jetons: Mapped[list["JetonRafraichissement"]] = relationship(
+    jetons: Mapped[list[JetonRafraichissement]] = relationship(
         back_populates="utilisateur", cascade="all, delete-orphan"
     )
 

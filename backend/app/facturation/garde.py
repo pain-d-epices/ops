@@ -7,8 +7,6 @@ peut expirer entre le lancement d'une tâche et son exécution.
 
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
-
 from app.facturation.plans import PIVOT, PIVOT_AUTOMATIQUE
 from app.modeles.enums import ModePivot
 from app.modeles.facturation import Plan

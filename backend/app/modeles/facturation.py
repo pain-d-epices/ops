@@ -57,7 +57,7 @@ class Plan(Base, HorodatageMixin):
 
     actif: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    abonnements: Mapped[list["Abonnement"]] = relationship(back_populates="plan")
+    abonnements: Mapped[list[Abonnement]] = relationship(back_populates="plan")
 
     def possede(self, fonctionnalite: str) -> bool:
         return fonctionnalite in (self.fonctionnalites or [])
@@ -95,7 +95,7 @@ class Abonnement(Base, HorodatageMixin):
     gumroad_email_acheteur: Mapped[str | None] = mapped_column(String(255))
     derniere_verification: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    organisation: Mapped["Organisation"] = relationship(back_populates="abonnements")
+    organisation: Mapped[Organisation] = relationship(back_populates="abonnements")
     plan: Mapped[Plan] = relationship(back_populates="abonnements")
 
     def __repr__(self) -> str:

@@ -72,13 +72,13 @@ class Investigation(Base, HorodatageMixin):
     nb_profils_confirmes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     nb_recherches_effectuees: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    executions: Mapped[list["ExecutionRecherche"]] = relationship(
+    executions: Mapped[list[ExecutionRecherche]] = relationship(
         back_populates="investigation", cascade="all, delete-orphan"
     )
-    profils: Mapped[list["ProfilIdentite"]] = relationship(
+    profils: Mapped[list[ProfilIdentite]] = relationship(
         back_populates="investigation", cascade="all, delete-orphan"
     )
-    propositions_pivot: Mapped[list["PropositionPivot"]] = relationship(
+    propositions_pivot: Mapped[list[PropositionPivot]] = relationship(
         back_populates="investigation", cascade="all, delete-orphan"
     )
 
@@ -159,10 +159,10 @@ class ProfilIdentite(Base, HorodatageMixin):
     donnees_maigret: Mapped[dict[str, Any]] = mapped_column(TypeJson, default=dict, nullable=False)
 
     investigation: Mapped[Investigation] = relationship(back_populates="profils")
-    donnees_extraites: Mapped[list["DonneeExtraite"]] = relationship(
+    donnees_extraites: Mapped[list[DonneeExtraite]] = relationship(
         back_populates="profil", cascade="all, delete-orphan"
     )
-    signaux: Mapped[list["SignalCorrelation"]] = relationship(
+    signaux: Mapped[list[SignalCorrelation]] = relationship(
         back_populates="profil", cascade="all, delete-orphan"
     )
 

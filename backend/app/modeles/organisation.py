@@ -37,13 +37,13 @@ class Organisation(Base, HorodatageMixin):
     # Durée de rétention RGPD des investigations, en jours (0 = valeur par défaut du serveur)
     retention_jours: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
-    membres: Mapped[list["Appartenance"]] = relationship(
+    membres: Mapped[list[Appartenance]] = relationship(
         back_populates="organisation", cascade="all, delete-orphan"
     )
-    abonnements: Mapped[list["Abonnement"]] = relationship(
+    abonnements: Mapped[list[Abonnement]] = relationship(
         back_populates="organisation", cascade="all, delete-orphan"
     )
-    invitations: Mapped[list["Invitation"]] = relationship(
+    invitations: Mapped[list[Invitation]] = relationship(
         back_populates="organisation", cascade="all, delete-orphan"
     )
 
@@ -70,7 +70,7 @@ class Appartenance(Base, HorodatageMixin):
     )
     role: Mapped[str] = mapped_column(String(20), default=RoleMembre.ANALYSTE.value, nullable=False)
 
-    utilisateur: Mapped["Utilisateur"] = relationship(back_populates="appartenances")
+    utilisateur: Mapped[Utilisateur] = relationship(back_populates="appartenances")
     organisation: Mapped[Organisation] = relationship(back_populates="membres")
 
     def __repr__(self) -> str:
