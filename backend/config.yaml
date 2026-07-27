@@ -1,0 +1,128 @@
+# =============================================================================
+#  Configuration métier de Searcher
+#  Ce fichier contient les réglages ajustables SANS toucher au code.
+#  Les secrets (mots de passe, clés API) vont dans .env, jamais ici.
+# =============================================================================
+
+# --- Moteur de corrélation --------------------------------------------------
+# Chaque règle produit un score entre 0 et 1 ; le poids détermine son influence
+# sur le score final. Mettre "actif: false" désactive une règle sans la supprimer.
+correlation:
+  # Seuils de classement du score final (sur 100)
+  seuils:
+    eleve: 70      # >= 70  -> confiance élevée
+    moyen: 40      # >= 40  -> confiance moyenne
+    # en dessous    -> confiance faible
+
+  # Score minimal pour qu'un profil soit considéré comme pivotable
+  score_minimal_pivot: 50
+
+  regles:
+    pseudo_similarite:
+      actif: true
+      poids: 3.0
+      # Un pseudo exact vaut 1.0 ; en dessous de ce seuil de similarité, la règle rend 0.
+      seuil_similarite: 0.72
+      # Suffixes numériques courants ("john", "john92") : pénalité légère au lieu de zéro
+      tolerance_suffixe_numerique: true
+
+    avatar_phash:
+      actif: true
+      poids: 2.5
+      # Distance de Hamming maximale entre deux hash perceptuels pour dire "même image"
+      distance_max: 8
+
+    liens_croises:
+      actif: true
+      poids: 3.0
+
+    coherence_temporelle:
+      actif: true
+      poids: 1.0
+      # Écart maximal (en jours) entre deux créations de compte pour rester cohérent
+      ecart_max_jours: 1095   # 3 ans
+
+    contenu_bio:
+      actif: true
+      poids: 1.5
+      seuil_similarite: 0.60
+
+    email_partage:
+      actif: true
+      poids: 3.5
+
+    site_douteux:
+      actif: true
+      poids: 2.0
+      # Sites connus pour renvoyer "trouvé" sur n'importe quel pseudo : pénalité négative
+      domaines:
+        - "www.instructables.com"
+        - "www.wikipedia.org"
+
+# --- Pivot ------------------------------------------------------------------
+pivot:
+  # PLAFOND DUR : aucune organisation, quel que soit son plan, ne peut le dépasser.
+  # Protège l'infrastructure d'une explosion combinatoire de requêtes.
+  profondeur_plafond_serveur: 4
+  profondeur_defaut: 1
+
+  # Nombre maximal de nouvelles recherches déclenchées par pivot pour une investigation
+  max_recherches_par_investigation: 25
+
+  # Types de données jugées pivotables et action associée
+  types_pivotables:
+    pseudo_alt: recherche_maigret
+    email: recherche_email
+    lien_externe: enrichissement_direct
+    nom_reel: recherche_maigret
+
+# --- Maigret ----------------------------------------------------------------
+maigret:
+  # Nombre de sites scannés par défaut (les N plus pertinents). 0 = tous (~3000, très long)
+  top_sites: 500
+  timeout_par_site: 20
+  # Délai maximal d'une exécution complète, en secondes
+  timeout_global: 900
+  # Ne conserver que les résultats "trouvé" (ignore les milliers de "non trouvé")
+  ignorer_non_trouves: true
+  # Nombre de requêtes simultanées de Maigret (baisser si l'IP se fait limiter)
+  concurrence: 10
+
+# --- Limitation de débit (rate limiting) ------------------------------------
+# File d'attente GLOBALE par domaine cible, partagée entre TOUTES les organisations.
+# C'est ce qui empêche un bannissement collectif de l'IP du service.
+rate_limiting:
+  defaut:
+    requetes_par_minute: 30
+    rafale: 10
+  par_domaine:
+    "api.github.com":
+      requetes_par_minute: 50      # 60/h sans token, 5000/h avec token
+      rafale: 10
+    "www.reddit.com":
+      requetes_par_minute: 20
+      rafale: 5
+    "hacker-news.firebaseio.com":
+      requetes_par_minute: 60
+      rafale: 20
+    "gitlab.com":
+      requetes_par_minute: 30
+      rafale: 10
+    "keybase.io":
+      requetes_par_minute: 20
+      rafale: 5
+
+# --- Réseau -----------------------------------------------------------------
+reseau:
+  timeout_connexion: 10
+  timeout_lecture: 20
+  tentatives_max: 3
+  user_agent: "SearcherOSINT/0.1 (+https://exemple.fr/contact ; outil de recherche autorisee)"
+
+# --- Rétention des données (RGPD) -------------------------------------------
+retention:
+  # Durée par défaut avant purge automatique d'une investigation (jours).
+  # Modifiable par organisation dans la table organizations.retention_jours.
+  jours_defaut: 90
+  # Durée de conservation des journaux d'accès (obligation de traçabilité)
+  jours_journaux: 365

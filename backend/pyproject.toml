@@ -1,0 +1,72 @@
+[project]
+name = "searcher-backend"
+version = "0.1.0"
+description = "Backend du SaaS OSINT de recherche et corrélation de pseudonymes"
+requires-python = ">=3.10"
+
+dependencies = [
+    # API web
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.12",
+    "websockets>=13.0",
+
+    # Base de données
+    "sqlalchemy>=2.0.36",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.14",
+
+    # Configuration & validation
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "email-validator>=2.2",
+    "pyyaml>=6.0",
+
+    # Sécurité
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.10",
+
+    # Tâches asynchrones
+    "celery>=5.4",
+    "redis>=5.2",
+
+    # Réseau sortant (modules de site, API Gumroad)
+    "httpx>=0.28",
+    "tenacity>=9.0",
+
+    # Moteur de corrélation
+    "rapidfuzz>=3.10",       # distance de chaînes — licence MIT (surtout PAS python-Levenshtein, qui est GPL)
+    "imagehash>=4.3",        # hash perceptuel d'avatar — licence BSD-2
+    "pillow>=11.0",
+
+    # Recherche de pseudonymes
+    "maigret>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "httpx>=0.28",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]  # Depends() en valeur par défaut = idiome FastAPI

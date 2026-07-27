@@ -1,0 +1,102 @@
+# =============================================================================
+#  Searcher — déploiement complet (développement et VPS européen)
+#  Lancement :  docker compose up -d
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_UTILISATEUR:-searcher}
+      POSTGRES_PASSWORD: ${POSTGRES_MOT_DE_PASSE:-searcher}
+      POSTGRES_DB: ${POSTGRES_BASE:-searcher}
+    volumes:
+      - donnees_postgres:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"   # exposé uniquement en local, jamais sur internet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_UTILISATEUR:-searcher}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - donnees_redis:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m app.scripts.initialiser_plans &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    env_file: .env
+    environment:
+      POSTGRES_HOTE: postgres
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - donnees_investigations:/app/donnees
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  # Worker des recherches Maigret (tâches longues, une par processus)
+  worker_recherche:
+    build: ./backend
+    restart: unless-stopped
+    command: celery -A app.taches.celery_app worker -Q recherche -c 2 -n recherche@%h --loglevel=info
+    env_file: .env
+    environment:
+      POSTGRES_HOTE: postgres
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - donnees_investigations:/app/donnees
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  # Worker des enrichissements et pivots (tâches courtes, plus parallélisées)
+  worker_enrichissement:
+    build: ./backend
+    restart: unless-stopped
+    command: celery -A app.taches.celery_app worker -Q enrichissement,pivot,maintenance -c 4 -n enrich@%h --loglevel=info
+    env_file: .env
+    environment:
+      POSTGRES_HOTE: postgres
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - donnees_investigations:/app/donnees
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  # Planificateur : purge RGPD, remise à zéro des quotas mensuels
+  planificateur:
+    build: ./backend
+    restart: unless-stopped
+    command: celery -A app.taches.celery_app beat --loglevel=info
+    env_file: .env
+    environment:
+      POSTGRES_HOTE: postgres
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis: {condition: service_healthy}
+
+volumes:
+  donnees_postgres:
+  donnees_redis:
+  donnees_investigations:
