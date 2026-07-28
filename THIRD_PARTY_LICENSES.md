@@ -78,6 +78,24 @@ bibliothèque.
 
 ---
 
+## Frontend
+
+| Bibliothèque | Licence | Rôle |
+|---|---|---|
+| React / React DOM | MIT | Bibliothèque d'interface |
+| React Router | MIT | Routage entre les pages |
+| TanStack Query (React Query) | MIT | Cache et synchronisation des données |
+| Cytoscape.js | MIT | Rendu du graphe interactif |
+| cytoscape-fcose | MIT | Algorithme de disposition du graphe |
+| Vite | MIT | Outil de construction |
+| TypeScript | Apache-2.0 | Typage statique |
+
+Aucune de ces dépendances n'est copaleft : le code du frontend peut rester
+propriétaire. Aucun framework CSS n'est utilisé (styles écrits à la main), ce qui
+évite une dépendance supplémentaire à auditer.
+
+---
+
 ## Outils de développement (non distribués)
 
 Ces outils ne sont pas embarqués dans le produit livré ; leur licence n'a donc aucune

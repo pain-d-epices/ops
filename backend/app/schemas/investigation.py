@@ -83,6 +83,9 @@ class ProfilDetaille(ProfilResume):
     statut_maigret: str
     decouvert_par_profil_id: str | None
     erreur_enrichissement: str | None
+    # Date du verdict manuel : l'interface l'affiche pour dater la vérification humaine
+    verdict_le: datetime | None = None
+    enrichi_le: datetime | None = None
     donnees_maigret: dict[str, Any] = {}
     donnees_extraites: list[DonneeSortie] = []
     # Détail du calcul du score : permet à l'analyste de contester une conclusion

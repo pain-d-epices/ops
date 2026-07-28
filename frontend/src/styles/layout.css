@@ -1,0 +1,399 @@
+/* Mise en page générale et styles propres aux pages. */
+
+.application {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* --- Barre supérieure ------------------------------------------------------ */
+
+.entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 22px;
+  height: 56px;
+  background: var(--fond-eleve);
+  border-bottom: 1px solid var(--bordure);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.marque {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--texte);
+  letter-spacing: -0.01em;
+}
+.marque:hover { text-decoration: none; }
+.marque-logo { font-size: 19px; }
+
+.navigation { display: flex; align-items: center; gap: 3px; }
+
+.navigation a {
+  padding: 7px 13px;
+  border-radius: var(--rayon-petit);
+  color: var(--texte-attenue);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background var(--transition), color var(--transition);
+}
+.navigation a:hover { background: var(--fond-survol); color: var(--texte); text-decoration: none; }
+.navigation a.actif { background: rgba(76, 139, 245, 0.14); color: var(--accent-clair); }
+
+.zone-compte { display: flex; align-items: center; gap: 12px; }
+
+.selecteur-organisation {
+  width: auto;
+  min-width: 150px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.contenu {
+  flex: 1;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 22px 60px;
+}
+
+.contenu-large { max-width: none; }
+
+/* --- Bandeau d'avertissement légal ---------------------------------------- */
+
+.bandeau-legal {
+  padding: 9px 22px;
+  background: rgba(210, 153, 34, 0.09);
+  border-bottom: 1px solid rgba(210, 153, 34, 0.25);
+  color: #e3c168;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* --- Pages d'authentification ---------------------------------------------- */
+
+.page-auth {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.boite-auth {
+  width: 100%;
+  max-width: 440px;
+}
+
+.entete-auth { margin-bottom: 26px; text-align: center; }
+.entete-auth .marque { justify-content: center; font-size: 22px; margin-bottom: 6px; }
+.entete-auth p { margin: 0; color: var(--texte-attenue); font-size: 13.5px; }
+
+.encart-cgu {
+  padding: 13px 15px;
+  margin-bottom: 16px;
+  background: var(--fond);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--texte-attenue);
+  max-height: 190px;
+  overflow-y: auto;
+}
+.encart-cgu strong { color: var(--texte); }
+
+.case-a-cocher {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  cursor: pointer;
+}
+.case-a-cocher input {
+  width: auto;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.case-a-cocher span { font-size: 13px; color: var(--texte-attenue); }
+
+.bas-auth { margin-top: 18px; text-align: center; font-size: 13.5px; color: var(--texte-attenue); }
+
+/* --- Tableau de bord ------------------------------------------------------- */
+
+.grille-tableau-bord {
+  display: grid;
+  grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .grille-tableau-bord { grid-template-columns: 1fr; }
+}
+
+.liste-investigations { display: flex; flex-direction: column; gap: 10px; }
+
+.carte-investigation {
+  display: block;
+  padding: 14px 16px;
+  background: var(--fond-carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  color: inherit;
+  transition: border-color var(--transition), background var(--transition);
+}
+.carte-investigation:hover {
+  border-color: var(--accent);
+  background: var(--fond-survol);
+  text-decoration: none;
+}
+
+.pseudo-cible {
+  font-family: var(--police-mono);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--texte);
+}
+
+.meta-investigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 7px;
+  color: var(--texte-faible);
+  font-size: 12.5px;
+}
+
+/* --- Page d'investigation -------------------------------------------------- */
+
+.entete-investigation {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.onglets {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--bordure);
+}
+
+.onglets button {
+  padding: 9px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--texte-attenue);
+  font-size: 14px;
+}
+.onglets button:hover { background: var(--fond-survol); border-color: transparent; color: var(--texte); }
+.onglets button.actif { color: var(--accent-clair); border-bottom-color: var(--accent); }
+
+.compteur-onglet {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 7px;
+  background: var(--fond-survol);
+  border-radius: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* Journal d'exécution en direct */
+.journal {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: var(--fond);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  font-family: var(--police-mono);
+  font-size: 12.5px;
+  line-height: 1.8;
+}
+
+.journal-ligne { display: flex; gap: 10px; }
+.journal-heure { color: var(--texte-faible); flex-shrink: 0; }
+.journal-succes { color: var(--confiance-elevee); }
+.journal-erreur { color: var(--danger); }
+
+/* --- Graphe ---------------------------------------------------------------- */
+
+.zone-graphe {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .zone-graphe { grid-template-columns: 1fr; }
+}
+
+.conteneur-graphe {
+  position: relative;
+  height: 620px;
+  background: var(--fond-carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  overflow: hidden;
+}
+
+.toile-graphe { width: 100%; height: 100%; }
+
+.controles-graphe {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(23, 27, 33, 0.94);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  backdrop-filter: blur(6px);
+  max-width: 250px;
+}
+
+.controles-graphe label { margin-bottom: 2px; font-size: 12px; }
+
+.legende {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  max-width: 380px;
+  padding: 10px 12px;
+  background: rgba(23, 27, 33, 0.94);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon-petit);
+  font-size: 11.5px;
+  backdrop-filter: blur(6px);
+}
+
+.legende-entree { display: flex; align-items: center; gap: 6px; color: var(--texte-attenue); }
+.legende-pastille { width: 10px; height: 10px; border-radius: 50%; }
+
+.outils-graphe {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+}
+
+/* Panneau latéral de détail */
+.panneau-detail {
+  max-height: 620px;
+  overflow-y: auto;
+  padding: 18px;
+  background: var(--fond-carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+}
+
+.entree-signal {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--fond);
+  border-left: 3px solid var(--bordure-forte);
+  border-radius: 0 var(--rayon-petit) var(--rayon-petit) 0;
+}
+.entree-signal.positif { border-left-color: var(--confiance-elevee); }
+.entree-signal.negatif { border-left-color: var(--danger); }
+
+.points-signal {
+  font-family: var(--police-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+.points-positifs { color: var(--confiance-elevee); }
+.points-negatifs { color: var(--danger); }
+
+.ligne-donnee {
+  display: flex;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--bordure);
+  font-size: 13px;
+}
+.ligne-donnee:last-child { border-bottom: none; }
+.type-donnee {
+  flex-shrink: 0;
+  width: 110px;
+  color: var(--texte-faible);
+  font-size: 12px;
+}
+.valeur-donnee { flex: 1; min-width: 0; word-break: break-word; }
+
+/* --- Abonnement ------------------------------------------------------------ */
+
+.grille-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
+
+.carte-plan {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: var(--fond-carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  transition: border-color var(--transition);
+}
+.carte-plan:hover { border-color: var(--bordure-forte); }
+.carte-plan.plan-actuel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.prix-plan { margin: 10px 0 16px; font-size: 26px; font-weight: 700; }
+.prix-plan span { font-size: 13px; font-weight: 400; color: var(--texte-attenue); }
+
+.liste-fonctionnalites { flex: 1; margin: 0 0 16px; padding: 0; list-style: none; font-size: 13px; }
+.liste-fonctionnalites li { padding: 4px 0; display: flex; gap: 8px; align-items: flex-start; }
+.liste-fonctionnalites .incluse { color: var(--confiance-elevee); }
+.liste-fonctionnalites .absente { color: var(--texte-faible); }
+
+.ligne-quota { margin-bottom: 16px; }
+.ligne-quota:last-child { margin-bottom: 0; }
+.entete-quota {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+/* --- Propositions de pivot ------------------------------------------------- */
+
+.carte-proposition {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--fond-carte);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.carte-proposition.en-attente { border-left: 3px solid var(--confiance-moyenne); }

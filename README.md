@@ -144,6 +144,36 @@ cd backend && celery -A app.taches.celery_app worker -Q recherche -c 2 --logleve
 cd backend && celery -A app.taches.celery_app worker -Q enrichissement,pivot,maintenance -c 4 --loglevel=info
 ```
 
+Sous Windows, ajoutez `--pool=solo` aux commandes Celery (le mode multiprocessus par
+défaut n'y fonctionne pas) :
+
+```bash
+cd backend && celery -A app.taches.celery_app worker -Q recherche,enrichissement,pivot,maintenance --pool=solo --loglevel=info
+```
+
+### Frontend
+
+```bash
+cd frontend && npm install
+```
+
+```bash
+cd frontend && npm run dev
+```
+
+L'interface est alors disponible sur http://localhost:5173. Le serveur de
+développement redirige `/api` et `/ws` vers le backend sur le port 8000 : les deux
+applications partagent la même origine, ce qui permet aux cookies d'authentification
+de circuler sans configuration CORS supplémentaire.
+
+Pour construire la version de production :
+
+```bash
+cd frontend && npm run build
+```
+
+Le résultat est produit dans `frontend/dist`, à servir par Caddy ou Nginx.
+
 ---
 
 ## Utilisation
@@ -313,9 +343,21 @@ Les tests les plus importants à ne jamais laisser échouer :
 
 ## État du projet
 
-**Backend complet et testé.** Frontend React à développer (prochaine étape) : pages
-d'authentification, lancement d'investigation, suivi temps réel, graphe interactif
-Cytoscape, vue tableau, page abonnement.
+**Backend complet et testé** (69 tests, migration validée sur PostgreSQL 16).
+
+**Frontend écrit, construction validée**, mais **pas encore vérifié en fonctionnement
+réel avec le backend** — c'est la première chose à faire à la reprise. Pages livrées :
+connexion, inscription avec acceptation des CGU, tableau de bord, suivi d'investigation
+en temps réel, graphe interactif, vue tableau, validation des rebonds, abonnement,
+organisation et membres.
+
+Restent à faire :
+
+- vérification de bout en bout dans le navigateur (parcours complet inscription →
+  recherche → graphe) ;
+- envoi des courriels d'invitation (le lien est pour l'instant affiché à l'écran) ;
+- export PDF du rapport (l'export JSON et CSV fonctionne) ;
+- 2FA (les champs sont déjà prévus en base).
 
 ## Crédits
 

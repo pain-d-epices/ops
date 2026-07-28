@@ -129,6 +129,8 @@ def obtenir_profil(
         statut_maigret=profil.statut_maigret,
         decouvert_par_profil_id=profil.decouvert_par_profil_id,
         erreur_enrichissement=profil.erreur_enrichissement,
+        verdict_le=profil.verdict_le,
+        enrichi_le=profil.enrichi_le,
         donnees_maigret=profil.donnees_maigret or {},
         donnees_extraites=[
             DonneeSortie(
