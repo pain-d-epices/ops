@@ -37,6 +37,10 @@ def _decouvrir() -> dict[str, ModuleSite]:
                 issubclass(objet, ModuleSite)
                 and objet is not ModuleSite
                 and objet.__module__ == module_python.__name__
+                # Une classe sans `nom` est un socle mutualisé (ModuleForgeGit par
+                # exemple), pas un module utilisable : elle n'est pas enregistrée.
+                and objet.nom
+                and objet.domaines
             ):
                 try:
                     instance = objet()

@@ -22,6 +22,7 @@ import fcose from "cytoscape-fcose";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Graphe, TypeNoeud } from "../../api/types";
+import { ICONES_TYPE, urlFavicon } from "./icones";
 
 cytoscape.use(fcose);
 
@@ -93,6 +94,32 @@ function tailleNoeud(type: TypeNoeud, score: number): number {
  * donnent soit un graphe perdu dans le vide, soit — bien plus gênant — une pelote
  * illisible. L'espacement croît donc avec le nombre de nœuds.
  */
+/**
+ * Style des comptes portant le favicon de leur site.
+ *
+ * Reconnaître GitHub ou Reddit d'un coup d'œil vaut mieux qu'un rond de couleur de
+ * plus : le fond clair fait ressortir l'icône, et l'anneau coloré continue de
+ * porter le niveau de confiance.
+ *
+ * Le bloc est typé à part car `background-image-crossorigin` accepte la valeur
+ * « null » d'après la documentation de Cytoscape, alors que les définitions de
+ * types livrées avec la bibliothèque ne connaissent que « anonymous » et
+ * « use-credentials ». Sans cette valeur, le service de favicons refuse de servir
+ * les images et aucune icône ne s'affiche — vérifié en conditions réelles.
+ * Contrepartie assumée : le canvas devient « teinté », donc non exportable en
+ * image tant que les icônes viennent d'une source externe.
+ */
+const STYLE_COMPTE_AVEC_FAVICON = {
+  selector: "node[type='compte'][favicon]",
+  style: {
+    "background-image": "data(favicon)",
+    "background-fit": "contain",
+    "background-color": "#f0f3f6",
+    "background-image-crossorigin": "null",
+    "border-width": 4,
+  },
+} as unknown as cytoscape.StylesheetJsonBlock;
+
 function parametresDisposition(nombreNoeuds: number) {
   const facteur = Math.min(3, Math.max(1, Math.sqrt(nombreNoeuds / 25)));
   return {
@@ -163,12 +190,25 @@ export function GrapheInvestigation({
             "transition-duration": 120,
           },
         },
-        // Une règle par type : la forme ne peut pas être pilotée par `data()`,
-        // Cytoscape n'acceptant qu'une valeur littérale pour cette propriété.
+        // Une règle par type : ni la forme ni l'icône ne peuvent être pilotées par
+        // `data()`, Cytoscape n'acceptant que des valeurs littérales ici.
         ...Object.entries(FORMES_NOEUD).map(([type, forme]) => ({
           selector: `node[type="${type}"]`,
-          style: { shape: forme },
+          style: {
+            shape: forme,
+            ...(ICONES_TYPE[type as TypeNoeud]
+              ? {
+                  "background-image": ICONES_TYPE[type as TypeNoeud] as string,
+                  "background-fit": "none" as const,
+                  "background-width": "55%",
+                  "background-height": "55%",
+                  "background-position-x": "50%",
+                  "background-position-y": "50%",
+                }
+              : {}),
+          },
         })),
+        STYLE_COMPTE_AVEC_FAVICON,
         {
           selector: "node.selectionne",
           style: {
@@ -256,8 +296,14 @@ export function GrapheInvestigation({
           noeud.type === "compte"
             ? couleurScore(noeud.score)
             : (COULEURS_NOEUD[noeud.type] ?? "#8b949e"),
-        couleurBordure: COULEURS_NOEUD[noeud.type] ?? "#8b949e",
+        couleurBordure:
+          // Pour un compte, l'anneau porte le score puisque le fond accueille le
+          // favicon ; pour les autres types, il rappelle simplement la catégorie.
+          noeud.type === "compte"
+            ? couleurScore(noeud.score)
+            : (COULEURS_NOEUD[noeud.type] ?? "#8b949e"),
         taille: tailleNoeud(noeud.type, noeud.score),
+        ...(noeud.type === "compte" ? { favicon: urlFavicon(noeud.libelle) } : {}),
       };
 
       if (existant.length > 0) {
@@ -453,29 +499,51 @@ export function GrapheInvestigation({
           Faible
         </div>
 
-        {/* Forme = nature de l'élément, lisible indépendamment de la couleur */}
-        <div className="legende-entree" style={{ width: "100%", marginTop: 4 }}>
+        {/* Icône et forme = nature de l'élément, lisibles indépendamment de la couleur */}
+        <div className="legende-entree" style={{ width: "100%", marginTop: 4, flexWrap: "wrap" }}>
           {(
             [
-              ["★", "pseudo", "Pseudonyme"],
-              ["●", "compte", "Compte"],
-              ["◆", "email", "E-mail"],
-              ["⬔", "pseudo_alt", "Autre pseudo"],
-              ["⬢", "nom", "Nom"],
-              ["▭", "localisation", "Lieu"],
-              ["∨", "lien", "Lien"],
+              ["pseudo", "Pseudonyme"],
+              ["email", "E-mail"],
+              ["pseudo_alt", "Autre pseudo"],
+              ["nom", "Nom"],
+              ["localisation", "Lieu"],
+              ["lien", "Lien"],
             ] as const
-          ).map(([symbole, type, libelle]) => (
+          ).map(([type, libelle]) => (
             <span
               key={type}
-              style={{ display: "inline-flex", alignItems: "center", gap: 4, marginRight: 12 }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, marginRight: 12 }}
             >
-              <span style={{ color: COULEURS_NOEUD[type as TypeNoeud], fontSize: 13 }}>
-                {symbole}
+              <span
+                style={{
+                  display: "inline-flex",
+                  width: 16,
+                  height: 16,
+                  borderRadius: 4,
+                  background: COULEURS_NOEUD[type],
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <img src={ICONES_TYPE[type]} alt="" width={11} height={11} />
               </span>
               {libelle}
             </span>
           ))}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span
+              style={{
+                display: "inline-block",
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                background: "#f0f3f6",
+                border: "2px solid #3fb950",
+              }}
+            />
+            Compte (logo du site)
+          </span>
         </div>
 
         <div className="legende-entree" style={{ width: "100%", color: "var(--texte-faible)" }}>

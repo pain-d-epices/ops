@@ -29,7 +29,7 @@ informations exploitables, et restitue l'ensemble sous forme de graphe de relati
 
 1. **Recherche** — lance [Maigret](https://github.com/soxoj/maigret) sur un pseudonyme et récupère les comptes trouvés.
 2. **Corrèle** — attribue à chaque compte un score de confiance calculé par des règles pondérées (similarité du pseudonyme, avatar identique, adresse partagée, liens réciproques, cohérence des dates), et écarte les faux positifs.
-3. **Enrichit** — applique un module par site pour extraire biographie, avatar, localisation, liens, date de création, autres pseudonymes.
+3. **Enrichit** — applique un module par site pour extraire biographie, avatar, localisation, liens, date de création, autres pseudonymes. Douze sites couverts : GitHub, GitLab, Codeberg, Gitee, Reddit, Mastodon, Bluesky, Hacker News, Dev.to, Keybase, MixCloud, Steam.
 4. **Pivote** — repart automatiquement des informations découvertes (un pseudonyme dans une bio relance une recherche, un lien déclenche un enrichissement direct), dans la limite de la profondeur autorisée.
 5. **Visualise** — restitue le tout en graphe interactif : nœuds = identités et informations, arêtes = relations découvertes.
 

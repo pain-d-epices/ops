@@ -121,7 +121,27 @@ d'utilisation s'appliquent aux appels effectués.
 | API GitLab | Enrichissement de profils | API v4 publique. |
 | API Hacker News | Enrichissement de profils | API Firebase publique, sans limite documentée. |
 | API Keybase | Enrichissement de profils | API publique de consultation. |
+| API Bluesky | Enrichissement de profils | Protocole AT, API de consultation entièrement ouverte. |
+| API MixCloud | Enrichissement de profils | API publique, sans clé. |
+| API Dev.to | Enrichissement de profils | API publique documentée. |
+| API Codeberg | Enrichissement de profils | API Forgejo publique. Instance communautaire : débit volontairement modéré. |
+| API Gitee | Enrichissement de profils | API v5 publique. **60 requêtes par heure** sans jeton. |
+| Profils XML Steam | Enrichissement de profils | Format `?xml=1` public, prévu par Valve, sans clé. |
+| Favicons DuckDuckGo | Logos des sites dans le graphe | Service public gratuit. Voir la note de confidentialité ci-dessous. |
 | API Gumroad | Vérification des licences d'abonnement | Nécessite un jeton vendeur. |
+
+### Note de confidentialité sur les favicons
+
+Les logos affichés dans le graphe proviennent de `icons.duckduckgo.com`. Interroger
+ce service pour chaque domaine trouvé lui révèle, en creux, quels sites apparaissent
+dans une investigation — sans jamais transmettre le pseudonyme recherché ni
+l'identité du client. DuckDuckGo a été retenu plutôt que Google précisément parce
+qu'il ne constitue pas de profil publicitaire.
+
+Pour un déploiement où même cette fuite indirecte serait inacceptable, il suffit de
+faire renvoyer `null` à la fonction `urlFavicon`
+(`frontend/src/composants/graphe/icones.ts`) : le graphe retombe alors sur des
+pastilles colorées, sans aucune requête externe.
 
 **Choix délibéré** : seuls des sites à API publique et documentée sont couverts par un
 module. Les plateformes fermées (X/Twitter, Instagram, Facebook, TikTok) exigent une

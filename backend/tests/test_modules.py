@@ -251,3 +251,148 @@ def test_executer_module_capture_les_erreurs_de_module(monkeypatch):
     assert prepare.erreur is not None
     assert "panne simulée" in prepare.erreur
     assert prepare.resultat is None
+
+
+# --- Nouveaux modules -------------------------------------------------------
+
+
+def test_douze_modules_couvrent_les_sites_attendus():
+    modules = charger_modules()
+    assert {
+        "github", "gitlab", "codeberg", "gitee",          # forges de code
+        "reddit", "mastodon", "bluesky", "hackernews",    # réseaux et communautés
+        "devto", "keybase", "mixcloud", "steam",
+    } == set(modules)
+
+
+def test_classe_de_base_des_forges_non_enregistree():
+    """`ModuleForgeGit` mutualise le code de Codeberg et Gitee ; ce n'est pas un
+    module utilisable et il ne doit jamais apparaître dans le registre."""
+    from app.modules.forge_git import ModuleForgeGit
+
+    assert ModuleForgeGit.nom == ""
+    assert ModuleForgeGit not in {type(m) for m in modules_disponibles()}
+
+
+def test_bluesky_extrait_le_domaine_personnel_verifie(monkeypatch):
+    """Un handle Bluesky qui n'est pas en .bsky.social est un domaine dont
+    l'utilisateur a prouvé le contrôle : piste de premier ordre."""
+    from app.modules.bluesky import ModuleBluesky
+
+    faux = FauxClient(
+        {
+            "getProfile": {
+                "handle": "jeanmartin.fr",
+                "displayName": "Jean Martin",
+                "description": "Développeur — contact@jeanmartin.fr",
+                "createdAt": "2023-05-01T10:00:00Z",
+                "followersCount": 250,
+            }
+        }
+    )
+    module = ModuleBluesky()
+    monkeypatch.setattr("app.modules.bluesky.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://bsky.app/profile/jeanmartin.fr", "jeanmartin.fr")
+
+    assert "https://jeanmartin.fr" in resultat.valeurs(TypeDonnee.LIEN_EXTERNE)
+    assert "contact@jeanmartin.fr" in resultat.valeurs(TypeDonnee.EMAIL)
+
+
+def test_bluesky_ignore_les_handles_par_defaut(monkeypatch):
+    """Un handle en .bsky.social n'est pas un domaine personnel : ne pas le
+    transformer en lien externe, ce serait un faux pivot."""
+    from app.modules.bluesky import ModuleBluesky
+
+    faux = FauxClient({"getProfile": {"handle": "jeanmartin.bsky.social", "displayName": "Jean"}})
+    module = ModuleBluesky()
+    monkeypatch.setattr("app.modules.bluesky.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://bsky.app/profile/jeanmartin.bsky.social", "jeanmartin")
+    assert resultat.valeurs(TypeDonnee.LIEN_EXTERNE) == []
+
+
+def test_devto_exploite_les_comptes_declares(monkeypatch):
+    from app.modules.devto import ModuleDevTo
+
+    faux = FauxClient(
+        {
+            "by_username": {
+                "username": "jeanmartin",
+                "name": "Jean Martin",
+                "summary": "Développeur Python",
+                "location": "Lyon",
+                "github_username": "jm_github",
+                "twitter_username": "jm_x",
+                "joined_at": "2020-01-15",
+            }
+        }
+    )
+    module = ModuleDevTo()
+    monkeypatch.setattr("app.modules.devto.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://dev.to/jeanmartin", "jeanmartin")
+    pseudos = resultat.valeurs(TypeDonnee.PSEUDO_ALT)
+    assert "jm_github" in pseudos and "jm_x" in pseudos
+
+
+def test_forge_git_partage_la_meme_extraction(monkeypatch):
+    """Codeberg et Gitee exposent la même API : une seule logique doit les servir."""
+    from app.modules.forge_git import ModuleCodeberg, ModuleGitee
+
+    reponse = {
+        "login": "jeanmartin",
+        "full_name": "Jean Martin",
+        "description": "Développeur",
+        "location": "Lyon",
+        "email": "jean@exemple.fr",
+        "website": "https://exemple.fr",
+        "created": "2021-03-01T10:00:00Z",
+    }
+
+    for classe, chemin in ((ModuleCodeberg, "codeberg.org"), (ModuleGitee, "gitee.com")):
+        module = classe()
+        monkeypatch.setattr("app.modules.forge_git.ClientHttp", lambda *a, **k: FauxClient({"users": reponse}))
+        resultat = module.enrichir(f"https://{chemin}/jeanmartin", "jeanmartin")
+        assert resultat.erreur is None, f"{module.nom} en échec"
+        assert "jean@exemple.fr" in resultat.valeurs(TypeDonnee.EMAIL)
+        assert resultat.valeurs(TypeDonnee.LOCALISATION) == ["Lyon"]
+
+
+def test_mixcloud_assemble_ville_et_pays(monkeypatch):
+    from app.modules.mixcloud import ModuleMixCloud
+
+    faux = FauxClient(
+        {
+            "api.mixcloud.com": {
+                "username": "jeanmartin",
+                "name": "Jean Martin",
+                "biog": "DJ lyonnais",
+                "city": "Lyon",
+                "country": "France",
+                "follower_count": 42,
+            }
+        }
+    )
+    module = ModuleMixCloud()
+    monkeypatch.setattr("app.modules.mixcloud.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://www.mixcloud.com/jeanmartin/", "jeanmartin")
+    assert resultat.valeurs(TypeDonnee.LOCALISATION) == ["Lyon, France"]
+
+
+def test_chaque_module_a_une_limite_de_debit_declaree():
+    """Un module sans limite déclarée retombe sur le réglage par défaut, ce qui peut
+    être trop agressif pour le site visé — ou trop lent. On vérifie que les
+    domaines interrogés par nos modules sont bien tous paramétrés."""
+    from app.config import config_metier
+
+    par_domaine = config_metier().obtenir("rate_limiting.par_domaine", {})
+    # Les domaines d'API réellement appelés, qui diffèrent parfois du domaine du profil
+    domaines_appeles = {
+        "api.github.com", "gitlab.com", "codeberg.org", "gitee.com",
+        "www.reddit.com", "hacker-news.firebaseio.com", "keybase.io",
+        "api.mixcloud.com", "public.api.bsky.app", "dev.to", "steamcommunity.com",
+    }
+    manquants = domaines_appeles - set(par_domaine)
+    assert not manquants, f"Limite de débit non déclarée pour : {sorted(manquants)}"

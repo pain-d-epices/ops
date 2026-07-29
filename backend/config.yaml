@@ -115,6 +115,27 @@ rate_limiting:
     "keybase.io":
       requetes_par_minute: 20
       rafale: 5
+    "api.mixcloud.com":
+      requetes_par_minute: 30
+      rafale: 10
+    "public.api.bsky.app":
+      requetes_par_minute: 60      # API de consultation publique, généreuse
+      rafale: 20
+    "dev.to":
+      requetes_par_minute: 30
+      rafale: 10
+    "codeberg.org":
+      requetes_par_minute: 20      # instance communautaire à budget limité : rester mesuré
+      rafale: 5
+    "gitee.com":
+      # Gitee annonce 60 requêtes par HEURE sans jeton (en-tête X-RateLimit-Limit).
+      # D'où ce réglage à une requête par minute : dépasser ce rythme ferait
+      # rejeter toutes les requêtes suivantes du service, pour tous les clients.
+      requetes_par_minute: 1
+      rafale: 2
+    "steamcommunity.com":
+      requetes_par_minute: 20
+      rafale: 5
 
 # --- Réseau -----------------------------------------------------------------
 reseau:
