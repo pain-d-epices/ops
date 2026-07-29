@@ -343,21 +343,30 @@ Les tests les plus importants à ne jamais laisser échouer :
 
 ## État du projet
 
-**Backend complet et testé** (69 tests, migration validée sur PostgreSQL 16).
+**Application complète et vérifiée de bout en bout** (72 tests automatisés, migration
+validée sur PostgreSQL 16).
 
-**Frontend écrit, construction validée**, mais **pas encore vérifié en fonctionnement
-réel avec le backend** — c'est la première chose à faire à la reprise. Pages livrées :
-connexion, inscription avec acceptation des CGU, tableau de bord, suivi d'investigation
-en temps réel, graphe interactif, vue tableau, validation des rebonds, abonnement,
-organisation et membres.
+Parcours réellement exécuté le 29/07/2026, avec Maigret sur de vrais pseudonymes :
+
+| Étape vérifiée | Résultat observé |
+|---|---|
+| Inscription, acceptation des CGU, session par cookie | ✅ |
+| Recherche « torvalds » sur 50 sites | 26 comptes trouvés, 4 à confiance élevée |
+| Corrélation et plafonnement du score | GitHub 90 %, comptes à signal unique plafonnés à 65 % |
+| Enrichissement GitHub | 7 informations extraites, avatar identifié par hash perceptuel |
+| Rebond automatique sur « soxoj » | variante `sox0j` détectée, explorée, puis arrêt propre |
+| Graphe | 31 nœuds, 34 arêtes, couleurs et tailles selon le score |
+| Explication du score dans l'interface | contribution détaillée de chaque règle |
+| Exports JSON et CSV | ✅ |
+| Quotas et gating par plan | consommation exacte, options bornées selon le palier |
 
 Restent à faire :
 
-- vérification de bout en bout dans le navigateur (parcours complet inscription →
-  recherche → graphe) ;
 - envoi des courriels d'invitation (le lien est pour l'instant affiché à l'écran) ;
 - export PDF du rapport (l'export JSON et CSV fonctionne) ;
-- 2FA (les champs sont déjà prévus en base).
+- 2FA (les champs sont déjà prévus en base) ;
+- **volet juridique avant commercialisation** : base légale, AIPD, contrat de
+  sous-traitance client — voir [docs/rgpd.md](docs/rgpd.md).
 
 ## Crédits
 

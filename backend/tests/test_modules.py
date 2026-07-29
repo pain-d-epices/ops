@@ -205,3 +205,49 @@ def test_hash_perceptuel_tolere_une_image_invalide():
 )
 def test_correspondance_de_domaine(domaine: str, attendu: bool):
     assert ModuleGitHub().gere(domaine) is attendu
+
+
+# --- Séparation appel réseau / écriture en base -----------------------------
+
+
+def test_executer_module_ne_prend_pas_de_session():
+    """Garantie de conception : l'appel réseau ne doit jamais se faire dans une
+    transaction ouverte, sous peine de saturer le pool de connexions PostgreSQL
+    dès que plusieurs organisations enrichissent en parallèle.
+
+    Ce test verrouille la signature : si quelqu'un réintroduit un paramètre
+    `session`, il échoue et force à reconsidérer le changement.
+    """
+    import inspect
+
+    from app.services.investigation import executer_module
+
+    parametres = set(inspect.signature(executer_module).parameters)
+    assert "session" not in parametres
+    assert parametres == {"url_profil", "pseudo", "domaine"}
+
+
+def test_executer_module_sans_module_disponible():
+    from app.services.investigation import executer_module
+
+    prepare = executer_module("https://site-sans-module.fr/jean", "jean", "site-sans-module.fr")
+    assert prepare.aucun_module
+    assert prepare.resultat is None
+
+
+def test_executer_module_capture_les_erreurs_de_module(monkeypatch):
+    """Un module qui lève une exception ne doit pas faire tomber la tâche."""
+    from app.modules.registre import charger_modules
+    from app.services.investigation import executer_module
+
+    module_github = charger_modules()["github"]
+
+    def enrichir_defaillant(*args, **kwargs):
+        raise RuntimeError("panne simulée du module")
+
+    monkeypatch.setattr(module_github, "enrichir", enrichir_defaillant)
+
+    prepare = executer_module("https://github.com/jean", "jean", "github.com")
+    assert prepare.erreur is not None
+    assert "panne simulée" in prepare.erreur
+    assert prepare.resultat is None

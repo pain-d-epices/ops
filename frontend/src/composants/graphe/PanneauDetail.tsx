@@ -148,7 +148,7 @@ function DetailProfil({
       {/* --- Verdict manuel --- */}
       <div className="separateur" />
       <div className="ligne" style={{ gap: 8 }}>
-        <button
+        <button type="button"
           className={`bouton-petit ${valide ? "bouton-succes" : ""}`}
           onClick={() => basculerVerdict("valide")}
           disabled={definirVerdict.isPending}
@@ -156,7 +156,7 @@ function DetailProfil({
         >
           {valide ? "✓ Validé" : "Valider"}
         </button>
-        <button
+        <button type="button"
           className={`bouton-petit ${rejete ? "bouton-danger" : ""}`}
           onClick={() => basculerVerdict("faux_positif")}
           disabled={definirVerdict.isPending}
@@ -165,7 +165,7 @@ function DetailProfil({
           {rejete ? "✕ Faux positif" : "Rejeter"}
         </button>
         {!profil.enrichi && (
-          <button
+          <button type="button"
             className="bouton-petit"
             onClick={() => enrichir.mutate(profilId)}
             disabled={enrichir.isPending}

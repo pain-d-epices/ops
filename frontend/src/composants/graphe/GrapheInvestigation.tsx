@@ -324,7 +324,7 @@ export function GrapheInvestigation({
               {typesPresents.map((type) => {
                 const masque = typesMasques.has(type);
                 return (
-                  <button
+                  <button type="button"
                     key={type}
                     className="bouton-petit"
                     style={{
@@ -346,10 +346,10 @@ export function GrapheInvestigation({
       </div>
 
       <div className="outils-graphe">
-        <button className="bouton-petit" onClick={recentrer} title="Ajuster à l'écran">
+        <button type="button" className="bouton-petit" onClick={recentrer} title="Ajuster à l'écran">
           Recentrer
         </button>
-        <button className="bouton-petit" onClick={reorganiser} title="Recalculer la disposition">
+        <button type="button" className="bouton-petit" onClick={reorganiser} title="Recalculer la disposition">
           Réorganiser
         </button>
       </div>

@@ -10,6 +10,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { rafraichirSession } from "../api/client";
 import { cles } from "../api/hooks";
 import type { EvenementInvestigation } from "../api/types";
 
@@ -42,6 +43,9 @@ export function useSuiviInvestigation(
   const minuterie = useRef<number | null>(null);
   const compteurJournal = useRef(0);
   const demonte = useRef(false);
+  // Une seule tentative de renouvellement de session par montage, pour ne pas
+  // boucler si le compte a réellement perdu ses droits.
+  const rafraichissementTente = useRef(false);
 
   const [etat, setEtat] = useState<EtatSuivi>({
     connecte: false,
@@ -230,8 +234,21 @@ export function useSuiviInvestigation(
 
       ws.onclose = (evenement) => {
         setEtat((p) => ({ ...p, connecte: false }));
-        // 4401 / 4404 : refus d'accès ou investigation inexistante — inutile d'insister
-        if (evenement.code === 4401 || evenement.code === 4404) return;
+
+        // 4401 : jeton d'accès expiré. Comme une recherche dure plus longtemps que la
+        // durée de vie du jeton, on renouvelle la session et on retente une fois —
+        // sans cela, le suivi en direct mourrait au bout de quinze minutes.
+        if (evenement.code === 4401) {
+          if (rafraichissementTente.current) return;
+          rafraichissementTente.current = true;
+          void rafraichirSession().then((reussi) => {
+            if (reussi && !demonte.current) connecter();
+          });
+          return;
+        }
+
+        // 4404 : investigation inexistante ou hors de l'organisation — inutile d'insister
+        if (evenement.code === 4404) return;
         planifierReconnexion();
       };
     };

@@ -65,7 +65,7 @@ export function PropositionsPivotListe({ investigationId }: { investigationId: s
                 </div>
               </div>
               <div className="ligne" style={{ gap: 8 }}>
-                <button
+                <button type="button"
                   className="bouton-petit bouton-succes"
                   onClick={() =>
                     decider.mutate({ propositionId: proposition.id, accepter: true })
@@ -74,7 +74,7 @@ export function PropositionsPivotListe({ investigationId }: { investigationId: s
                 >
                   Lancer
                 </button>
-                <button
+                <button type="button"
                   className="bouton-petit"
                   onClick={() =>
                     decider.mutate({ propositionId: proposition.id, accepter: false })

@@ -63,7 +63,7 @@ export function MiseEnPage({ children }: { children: ReactNode }) {
           <span className="petit attenue tronque" style={{ maxWidth: 190 }}>
             {utilisateur?.email}
           </span>
-          <button className="bouton-discret" onClick={seDeconnecter}>
+          <button type="button" className="bouton-discret" onClick={seDeconnecter}>
             Déconnexion
           </button>
         </div>

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import urlparse  # noqa: F401 — utilisé par domaine_de()
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -365,25 +365,65 @@ def rescorer_investigation(session: Session, investigation: Investigation) -> in
 # ---------------------------------------------------------------------------
 
 
-def enrichir_profil(session: Session, investigation: Investigation, profil: ProfilIdentite) -> str | None:
-    """Applique le module correspondant au site du profil.
+@dataclass
+class EnrichissementPrepare:
+    """Résultat d'un appel de module, en attente d'enregistrement."""
 
-    Renvoie un message d'erreur, ou None en cas de succès. L'absence de module pour
-    un site n'est pas une erreur : la plupart des 3000 sites de Maigret n'en ont pas.
+    module_nom: str
+    resultat: ResultatEnrichissement | None = None
+    erreur: str | None = None
+
+    @property
+    def aucun_module(self) -> bool:
+        return self.module_nom == ""
+
+
+AUCUN_MODULE = EnrichissementPrepare(module_nom="")
+
+
+def executer_module(url_profil: str, pseudo: str, domaine: str) -> EnrichissementPrepare:
+    """Interroge le site distant. **Ne prend pas de session en paramètre, à dessein.**
+
+    Un enrichissement dure plusieurs secondes (requêtes réseau, attente du limiteur de
+    débit, téléchargement d'avatar). Le faire à l'intérieur d'une transaction ouverte
+    immobiliserait une connexion du pool PostgreSQL pendant tout ce temps : avec
+    plusieurs organisations enrichissant en parallèle, le pool serait saturé et l'API
+    deviendrait indisponible pour tout le monde.
+
+    L'appel réseau est donc effectué ici, hors transaction, et son résultat est
+    enregistré ensuite par `enregistrer_enrichissement` dans une transaction courte.
     """
-    module = module_pour_domaine(profil.site_domaine)
+    module = module_pour_domaine(domaine)
     if module is None:
+        return AUCUN_MODULE
+
+    try:
+        return EnrichissementPrepare(module_nom=module.nom, resultat=module.enrichir(url_profil, pseudo))
+    except Exception as exc:  # noqa: BLE001 — un module tiers ne doit pas faire tomber la tâche
+        journal.exception("Module « %s » en échec sur %s", module.nom, url_profil)
+        return EnrichissementPrepare(
+            module_nom=module.nom, erreur=f"Module {module.nom} en erreur : {exc}"[:500]
+        )
+
+
+def enregistrer_enrichissement(
+    session: Session,
+    investigation: Investigation,
+    profil: ProfilIdentite,
+    prepare: EnrichissementPrepare,
+) -> str | None:
+    """Enregistre le résultat d'un module : données extraites, nœuds et arêtes du graphe."""
+    if prepare.aucun_module:
         profil.erreur_enrichissement = None
         return None
 
-    try:
-        resultat: ResultatEnrichissement = module.enrichir(profil.url, profil.pseudo_sur_le_site)
-    except Exception as exc:  # noqa: BLE001 — un module tiers ne doit pas faire tomber la tâche
-        journal.exception("Module « %s » en échec sur %s", module.nom, profil.url)
-        profil.erreur_enrichissement = f"Module {module.nom} en erreur : {exc}"[:500]
-        return profil.erreur_enrichissement
+    if prepare.erreur is not None or prepare.resultat is None:
+        profil.erreur_enrichissement = prepare.erreur
+        return prepare.erreur
 
-    profil.module_utilise = module.nom
+    module_nom = prepare.module_nom
+    resultat = prepare.resultat
+    profil.module_utilise = module_nom
     profil.enrichi = True
     profil.enrichi_le = maintenant()
     profil.erreur_enrichissement = resultat.erreur[:500] if resultat.erreur else None
@@ -399,7 +439,7 @@ def enrichir_profil(session: Session, investigation: Investigation, profil: Prof
             session, investigation, profil,
             type_donnee=info.type,
             valeur=info.valeur,
-            module_source=module.nom,
+            module_source=module_nom,
             confiance=info.confiance,
             meta=info.meta,
         )
@@ -412,7 +452,7 @@ def enrichir_profil(session: Session, investigation: Investigation, profil: Prof
 
         noeud_info = depot.obtenir_ou_creer_noeud(
             type_noeud, info.valeur, profondeur=profil.profondeur + 1,
-            meta={"type_donnee": info.type.value, "module": module.nom},
+            meta={"type_donnee": info.type.value, "module": module_nom},
         )
         depot.creer_arete(
             noeud_compte, noeud_info, TypeArete.INFORMATION_EXTRAITE,
@@ -426,6 +466,17 @@ def enrichir_profil(session: Session, investigation: Investigation, profil: Prof
 
     session.flush()
     return resultat.erreur
+
+
+def enrichir_profil(session: Session, investigation: Investigation, profil: ProfilIdentite) -> str | None:
+    """Enchaîne appel du module et enregistrement, dans la session fournie.
+
+    Pratique pour les tests et les scripts. **À éviter dans les tâches de fond** :
+    l'appel réseau se déroule alors dans la transaction ouverte — voir l'explication
+    dans `executer_module`. Les tâches utilisent les deux fonctions séparément.
+    """
+    prepare = executer_module(profil.url, profil.pseudo_sur_le_site, profil.site_domaine)
+    return enregistrer_enrichissement(session, investigation, profil, prepare)
 
 
 # Seules les informations qui identifient quelque chose deviennent des nœuds.

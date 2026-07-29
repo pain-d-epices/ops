@@ -18,7 +18,8 @@ from app.facturation.quotas import QuotaDepasse, consommer_quota
 from app.infra.evenements import TypeEvenement, bus
 from app.modeles.investigation import Investigation
 from app.services.investigation import (
-    enrichir_profil,
+    enregistrer_enrichissement,
+    executer_module,
     profils_a_enrichir,
     rescorer_investigation,
 )
@@ -60,16 +61,11 @@ def enrichir_investigation(investigation_id: str, profondeur: int = 0) -> dict:
     enrichis = 0
     quota_epuise = False
 
+    from app.modeles.investigation import ProfilIdentite
+
     for profil_id in candidats:
-        # Une session par profil : un module lent ou en erreur ne doit pas maintenir
-        # une transaction ouverte sur toute la durée de l'enrichissement.
+        # --- Étape 1 : réserver le quota et lire ce qu'il faut (transaction courte) ---
         with portee_session() as session:
-            investigation = session.get(Investigation, investigation_id)
-            if investigation is None:
-                break
-
-            from app.modeles.investigation import ProfilIdentite
-
             profil = session.get(ProfilIdentite, profil_id)
             if profil is None:
                 continue
@@ -86,13 +82,28 @@ def enrichir_investigation(investigation_id: str, profondeur: int = 0) -> dict:
                 quota_epuise = True
                 break
 
-            erreur = enrichir_profil(session, investigation, profil)
-            if erreur is None:
-                enrichis += 1
-            bus().emettre(
-                TypeEvenement.PROFIL_MIS_A_JOUR, investigation_id, organisation_id,
-                profil_id=profil_id, enrichi=True, erreur=erreur,
-            )
+            url, pseudo, domaine = profil.url, profil.pseudo_sur_le_site, profil.site_domaine
+
+        # --- Étape 2 : interroger le site, HORS transaction ---
+        # Un enrichissement dure plusieurs secondes. Garder une connexion PostgreSQL
+        # ouverte pendant ce temps saturerait le pool dès que plusieurs organisations
+        # enrichissent en parallèle.
+        prepare = executer_module(url, pseudo, domaine)
+
+        # --- Étape 3 : enregistrer le résultat (transaction courte) ---
+        with portee_session() as session:
+            investigation = session.get(Investigation, investigation_id)
+            profil = session.get(ProfilIdentite, profil_id)
+            if investigation is None or profil is None:
+                break
+            erreur = enregistrer_enrichissement(session, investigation, profil, prepare)
+
+        if erreur is None:
+            enrichis += 1
+        bus().emettre(
+            TypeEvenement.PROFIL_MIS_A_JOUR, investigation_id, organisation_id,
+            profil_id=profil_id, enrichi=True, erreur=erreur,
+        )
 
     # Les données fraîchement extraites changent les scores : il faut rescorer avant
     # de décider quels profils peuvent servir de point de pivot.
@@ -129,29 +140,38 @@ def _terminer(investigation_id: str) -> None:
 @celery_app.task(name="app.taches.enrichissement.enrichir_profil_unique")
 def enrichir_profil_unique(investigation_id: str, profil_id: str) -> dict:
     """Enrichissement d'un seul profil, déclenché manuellement depuis l'interface."""
+    from app.modeles.investigation import ProfilIdentite
+
+    # Étape 1 : vérifications et réservation du quota (transaction courte)
     with portee_session() as session:
         investigation = session.get(Investigation, investigation_id)
-        if investigation is None:
-            return {"statut": "introuvable"}
-
-        from app.modeles.investigation import ProfilIdentite
-
         profil = session.get(ProfilIdentite, profil_id)
-        if profil is None or profil.investigation_id != investigation_id:
+        if investigation is None or profil is None or profil.investigation_id != investigation_id:
             return {"statut": "introuvable"}
 
-        plan = plan_actif(session, investigation.organisation_id)
+        organisation_id = investigation.organisation_id
+        plan = plan_actif(session, organisation_id)
         if not plan.possede(MODULES):
             return {"statut": "non_autorise"}
 
         try:
-            consommer_quota(session, investigation.organisation_id, plan, "enrichissements")
+            consommer_quota(session, organisation_id, plan, "enrichissements")
         except QuotaDepasse as exc:
             return {"statut": "quota_depasse", "message": str(exc)}
 
-        erreur = enrichir_profil(session, investigation, profil)
+        url, pseudo, domaine = profil.url, profil.pseudo_sur_le_site, profil.site_domaine
+
+    # Étape 2 : appel réseau hors transaction (voir executer_module)
+    prepare = executer_module(url, pseudo, domaine)
+
+    # Étape 3 : enregistrement (transaction courte)
+    with portee_session() as session:
+        investigation = session.get(Investigation, investigation_id)
+        profil = session.get(ProfilIdentite, profil_id)
+        if investigation is None or profil is None:
+            return {"statut": "introuvable"}
+        erreur = enregistrer_enrichissement(session, investigation, profil, prepare)
         rescorer_investigation(session, investigation)
-        organisation_id = investigation.organisation_id
 
     bus().emettre(
         TypeEvenement.PROFIL_MIS_A_JOUR, investigation_id, organisation_id,

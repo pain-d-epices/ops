@@ -40,6 +40,7 @@ function FormulaireInvestigation() {
   const [titre, setTitre] = useState("");
   const [profondeur, setProfondeur] = useState<number | null>(null);
   const [modePivot, setModePivot] = useState<ModePivot | null>(null);
+  const [nombreSites, setNombreSites] = useState<number>(500);
   const [sitesExclus, setSitesExclus] = useState("");
   const [optionsVisibles, setOptionsVisibles] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -67,6 +68,7 @@ function FormulaireInvestigation() {
         titre: titre.trim() || null,
         profondeur_pivot: profondeur,
         mode_pivot: modePivot,
+        top_sites: nombreSites,
         sites_exclus: sitesExclus
           .split(",")
           .map((s) => s.trim())
@@ -207,6 +209,26 @@ function FormulaireInvestigation() {
                 Automatique{!pivotAutoDisponible ? " (plan Pro requis)" : ""}
               </option>
             </select>
+          </div>
+
+          <div className="champ">
+            <label htmlFor="nombre-sites">Nombre de sites à analyser</label>
+            <select
+              id="nombre-sites"
+              value={nombreSites}
+              onChange={(e) => setNombreSites(Number(e.target.value))}
+            >
+              <option value={50}>50 — les plus fréquentés (environ 1 minute)</option>
+              <option value={200}>200 (environ 3 minutes)</option>
+              <option value={500}>500 — recommandé (environ 6 minutes)</option>
+              <option value={1000}>1000 (environ 12 minutes)</option>
+              <option value={3000}>Tous les sites (long, plus de 20 minutes)</option>
+            </select>
+            <div className="aide">
+              C'est le principal levier sur la durée d'une recherche. Les sites sont
+              classés par fréquentation : les premiers sont les plus susceptibles de
+              donner un résultat.
+            </div>
           </div>
 
           <div className="champ">

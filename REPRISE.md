@@ -1,36 +1,23 @@
 # Où reprendre
 
-Point d'étape au **28/07/2026**, à lire en premier à la reprise.
+Point d'étape au **29/07/2026**.
 
-## État
+## État : application vérifiée de bout en bout
 
-| Partie | État |
-|---|---|
-| Backend | ✅ Complet, 69 tests au vert, migration validée sur PostgreSQL 16 |
-| Frontend | ⚠️ Écrit et compilé sans erreur, **jamais exécuté avec le backend** |
+Le parcours complet a été exécuté en conditions réelles (Maigret sur de vrais
+pseudonymes, PostgreSQL, Redis, worker Celery, interface dans le navigateur). Tout
+fonctionne : inscription, recherche, corrélation, enrichissement, rebond automatique,
+graphe, explication des scores, exports, quotas et gating par plan.
 
-## À faire en premier : la vérification de bout en bout
+72 tests automatisés au vert.
 
-C'est l'étape qui a été interrompue. Rien ne prouve encore que l'interface fonctionne
-réellement avec l'API — seulement qu'elle compile.
-
-### 1. Démarrer l'infrastructure
+## Relancer le projet
 
 ```bash
 docker compose up -d postgres redis
 ```
 
-### 2. Préparer la base (une seule fois)
-
-```bash
-cd backend && .venv/Scripts/python -m alembic upgrade head
-```
-
-```bash
-cd backend && .venv/Scripts/python -m app.scripts.initialiser_plans
-```
-
-### 3. Lancer les trois processus, chacun dans son terminal
+Puis trois terminaux :
 
 ```bash
 cd backend && .venv/Scripts/python -m uvicorn app.main:app --port 8000 --reload
@@ -44,44 +31,72 @@ cd backend && .venv/Scripts/python -m celery -A app.taches.celery_app worker -Q 
 cd frontend && npm run dev
 ```
 
+Interface sur http://localhost:5173
+
 > Sous Windows, `--pool=solo` est indispensable pour Celery.
+>
+> Si Docker Desktop refuse de démarrer avec une erreur de socket
+> (`dockerInference` ou `engine.sock` inaccessibles), voir la section « Incident
+> Docker » plus bas.
 
-### 4. Parcours à vérifier dans le navigateur (http://localhost:5173)
+## Compte de test existant
 
-1. Créer un compte (acceptation des CGU obligatoire) ;
-2. lancer une recherche sur un pseudonyme réel — par exemple `torvalds`, en réglant
-   « sites à scanner » assez bas dans les options avancées pour que ce soit rapide ;
-3. vérifier que la barre de progression avance **en temps réel** (WebSocket) ;
-4. vérifier que le graphe se remplit au fur et à mesure, sans que les nœuds déjà
-   placés ne sautent ;
-5. cliquer sur un compte : le panneau latéral doit détailler le calcul de son score ;
-6. tester la vue tableau, un verdict manuel, puis l'export JSON.
+`remi@cabinet-test.fr` / `PhraseDePasseLongue2026` — organisation « Cabinet de test »,
+plan Pro, rebond automatique sur 2 niveaux.
 
-### 5. Pour tester l'enrichissement et le rebond
-
-Ces fonctionnalités sont réservées aux plans payants. Pour passer une organisation au
-plan Pro sans passer par Gumroad :
+Pour passer une autre organisation en plan payant sans passer par Gumroad :
 
 ```bash
-cd backend && .venv/Scripts/python -c "from app.db.session import portee_session; from app.modeles import Organisation, Plan; from app.services.gumroad import activer_abonnement; from sqlalchemy import select; s=portee_session().__enter__(); org=s.scalar(select(Organisation)); plan=s.scalar(select(Plan).where(Plan.code=='pro')); activer_abonnement(s, org, plan, cle_licence='TEST'); s.commit(); print('Plan pro active pour', org.nom)"
+cd backend && .venv/Scripts/python -c "from app.db.session import portee_session; from app.modeles import Organisation, Plan; from app.services.gumroad import activer_abonnement; from sqlalchemy import select; s=portee_session().__enter__(); org=s.scalar(select(Organisation).where(Organisation.slug=='VOTRE-SLUG')); plan=s.scalar(select(Plan).where(Plan.code=='pro')); activer_abonnement(s, org, plan, cle_licence='TEST'); s.commit(); print('ok')"
 ```
 
-Un jeton GitHub dans `.env` (`GITHUB_TOKEN`) est fortement recommandé : sans lui,
-l'API GitHub limite à 60 requêtes par heure.
+## Ce qui reste à faire
 
-## Points restants après cette vérification
+1. **Envoi des courriels d'invitation** — le lien d'invitation s'affiche à l'écran ;
+   il faut le transmettre manuellement pour l'instant. Nécessite un service d'envoi
+   (Brevo, Scaleway TEM, ou SMTP classique).
+2. **Export PDF du rapport** — JSON et CSV fonctionnent.
+3. **2FA** — les champs `totp_secret` et `totp_actif` existent déjà en base.
+4. **Volet juridique** — base légale (intérêt légitime), AIPD, contrat de
+   sous-traitance client. À faire valider par un juriste **avant la première vente**.
+   Voir [docs/rgpd.md](docs/rgpd.md).
+5. **Jeton GitHub** — renseigner `GITHUB_TOKEN` dans `.env` fait passer la limite de
+   60 à 5000 requêtes par heure. Indispensable dès plusieurs clients.
 
-- Envoi des courriels d'invitation (le lien s'affiche à l'écran pour l'instant)
-- Export PDF du rapport (JSON et CSV fonctionnent)
-- 2FA (champs déjà prévus en base)
-- **Volet juridique avant commercialisation** : base légale, AIPD, contrat de
-  sous-traitance client — voir [docs/rgpd.md](docs/rgpd.md)
+## Points de performance observés
 
-## Rappel des décisions déjà arrêtées
+- Une recherche Maigret sur 50 sites prend environ 25 secondes.
+- Le **premier** lancement après démarrage du worker ajoute environ 2 minutes :
+  l'import de la bibliothèque Maigret et le chargement de sa base de 3221 sites sont
+  lourds. Les recherches suivantes n'en souffrent pas. En production, les workers
+  tournant en continu, cela ne se produit qu'au déploiement.
+- L'enrichissement d'un profil prend 1 à 3 secondes (appels réseau).
+
+## Incident Docker rencontré le 29/07/2026
+
+Docker Desktop refusait de démarrer avec :
+
+```
+initializing Inference manager: listening on unix://...\dockerInference:
+remove ...: The file cannot be accessed by the system.
+```
+
+Sockets Unix orphelins que Windows ne parvient pas à supprimer. Résolu ainsi :
+
+1. arrêt de tous les processus Docker ;
+2. renommage des dossiers `%LOCALAPPDATA%\Docker\run` et
+   `%LOCALAPPDATA%\docker-secrets-engine` (Docker les recrée au démarrage) ;
+3. passage de `EnableDockerAI` à `false` dans
+   `%APPDATA%\Docker\settings-store.json` (sauvegarde conservée sous
+   `settings-store.json.sauvegarde_searcher`).
+
+Si l'incident se reproduit, appliquer la même procédure.
+
+## Rappel des décisions arrêtées
 
 - Paiement par **Gumroad** (clé de licence), pas Stripe
 - Graphe stocké dans **PostgreSQL**, pas de Neo4j
 - Modules uniquement sur **APIs publiques** (GitHub, Reddit, Mastodon, GitLab,
   Hacker News, Keybase)
-- Maigret est lancé avec `--no-recursion` en permanence, sans quoi il pivote de
-  lui-même et le palier gratuit obtiendrait gratuitement une fonctionnalité payante
+- Maigret lancé avec `--no-recursion` en permanence, sans quoi il pivote de lui-même
+  et le palier gratuit obtiendrait gratuitement une fonctionnalité payante

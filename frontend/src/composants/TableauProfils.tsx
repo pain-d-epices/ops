@@ -81,7 +81,7 @@ export function TableauProfils({
           </label>
         </div>
 
-        <button
+        <button type="button"
           className="bouton-petit"
           onClick={() => relancer.mutate(investigationId)}
           disabled={relancer.isPending}

@@ -159,7 +159,7 @@ function CartePlan({ plan }: { plan: Plan }) {
       </ul>
 
       {plan.est_plan_actuel ? (
-        <button disabled>Palier actuel</button>
+        <button type="button" disabled>Palier actuel</button>
       ) : plan.url_achat ? (
         <a
           className="bouton bouton-principal"
@@ -170,9 +170,9 @@ function CartePlan({ plan }: { plan: Plan }) {
           Souscrire sur Gumroad
         </a>
       ) : plan.prix_mensuel_cents === 0 ? (
-        <button disabled>Palier de découverte</button>
+        <button type="button" disabled>Palier de découverte</button>
       ) : (
-        <button disabled title="Aucun produit Gumroad n'est configuré pour ce palier">
+        <button type="button" disabled title="Aucun produit Gumroad n'est configuré pour ce palier">
           Bientôt disponible
         </button>
       )}

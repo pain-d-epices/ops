@@ -57,9 +57,48 @@ function construireUrl(
   return url.pathname + url.search;
 }
 
+/**
+ * Renouvellement du jeton d'accès.
+ *
+ * Le jeton d'accès ne vit que 15 minutes, alors qu'une recherche en dure jusqu'à 10 :
+ * sans ce mécanisme, l'analyste serait déconnecté en pleine investigation. Le cookie
+ * de rafraîchissement, lui, est valable deux semaines.
+ *
+ * La promesse est partagée entre tous les appels : si dix requêtes reçoivent un 401
+ * en même temps, un seul rafraîchissement est déclenché — sinon la rotation des
+ * jetons côté serveur invaliderait les tentatives concurrentes.
+ */
+let rafraichissementEnCours: Promise<boolean> | null = null;
+
+export async function rafraichirSession(): Promise<boolean> {
+  if (!rafraichissementEnCours) {
+    rafraichissementEnCours = fetch(`${BASE}/auth/rafraichir`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((reponse) => reponse.ok)
+      .catch(() => false)
+      .finally(() => {
+        // Libère le verrou au tour suivant, une fois les appelants servis
+        setTimeout(() => {
+          rafraichissementEnCours = null;
+        }, 0);
+      });
+  }
+  return rafraichissementEnCours;
+}
+
 export async function appelerApi<T>(
   chemin: string,
   options: OptionsRequete = {},
+): Promise<T> {
+  return executerRequete<T>(chemin, options, true);
+}
+
+async function executerRequete<T>(
+  chemin: string,
+  options: OptionsRequete,
+  autoriserRafraichissement: boolean,
 ): Promise<T> {
   const { methode = "GET", corps, parametres, organisationId } = options;
 
@@ -79,6 +118,20 @@ export async function appelerApi<T>(
     body: corps !== undefined ? JSON.stringify(corps) : undefined,
     credentials: "include",
   });
+
+  // Jeton d'accès expiré : on le renouvelle et on rejoue la requête, une seule fois.
+  // Les routes d'authentification elles-mêmes sont exclues, sous peine de boucle.
+  if (
+    reponse.status === 401 &&
+    autoriserRafraichissement &&
+    !chemin.startsWith("/auth/rafraichir") &&
+    !chemin.startsWith("/auth/connexion") &&
+    !chemin.startsWith("/auth/inscription")
+  ) {
+    if (await rafraichirSession()) {
+      return executerRequete<T>(chemin, options, false);
+    }
+  }
 
   if (reponse.status === 204) {
     return undefined as T;
@@ -132,10 +185,14 @@ export async function telechargerExport(
   const entetes: Record<string, string> = {};
   if (organisationId) entetes["X-Organisation"] = organisationId;
 
-  const reponse = await fetch(
-    `${BASE}/investigations/${investigationId}/export?format=${format}`,
-    { credentials: "include", headers: entetes },
-  );
+  const url = `${BASE}/investigations/${investigationId}/export?format=${format}`;
+  let reponse = await fetch(url, { credentials: "include", headers: entetes });
+
+  // Même logique que les autres appels : un jeton expiré ne doit pas faire échouer
+  // un export que l'utilisateur vient de demander.
+  if (reponse.status === 401 && (await rafraichirSession())) {
+    reponse = await fetch(url, { credentials: "include", headers: entetes });
+  }
 
   if (!reponse.ok) {
     const donnees = await reponse.json().catch(() => null);
@@ -151,12 +208,12 @@ export async function telechargerExport(
   const correspondance = entete.match(/filename="?([^"]+)"?/);
   const nomFichier = correspondance?.[1] ?? `export.${format}`;
 
-  const url = URL.createObjectURL(blob);
+  const urlBlob = URL.createObjectURL(blob);
   const lien = document.createElement("a");
-  lien.href = url;
+  lien.href = urlBlob;
   lien.download = nomFichier;
   document.body.appendChild(lien);
   lien.click();
   lien.remove();
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(urlBlob);
 }

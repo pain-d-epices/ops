@@ -134,13 +134,13 @@ export function PageInvestigation() {
         </div>
 
         <div className="ligne" style={{ gap: 8 }}>
-          <button className="bouton-petit" onClick={() => exporter("json")}>
+          <button type="button" className="bouton-petit" onClick={() => exporter("json")}>
             Export JSON
           </button>
-          <button className="bouton-petit" onClick={() => exporter("csv")}>
+          <button type="button" className="bouton-petit" onClick={() => exporter("csv")}>
             Export CSV
           </button>
-          <button
+          <button type="button"
             className="bouton-petit bouton-danger"
             onClick={supprimerInvestigation}
             disabled={supprimer.isPending}
@@ -194,20 +194,20 @@ export function PageInvestigation() {
       </div>
 
       <div className="onglets">
-        <button
+        <button type="button"
           className={onglet === "graphe" ? "actif" : ""}
           onClick={() => setOnglet("graphe")}
         >
           Graphe
         </button>
-        <button
+        <button type="button"
           className={onglet === "comptes" ? "actif" : ""}
           onClick={() => setOnglet("comptes")}
         >
           Comptes
           <span className="compteur-onglet">{investigation.nb_profils_trouves}</span>
         </button>
-        <button
+        <button type="button"
           className={onglet === "rebonds" ? "actif" : ""}
           onClick={() => setOnglet("rebonds")}
         >
@@ -218,7 +218,7 @@ export function PageInvestigation() {
             </span>
           )}
         </button>
-        <button
+        <button type="button"
           className={onglet === "journal" ? "actif" : ""}
           onClick={() => setOnglet("journal")}
         >
