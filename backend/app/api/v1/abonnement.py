@@ -52,6 +52,7 @@ def _plan_sortie(plan: Plan, plan_actuel_code: str | None = None) -> PlanSortie:
         quota_utilisateurs=plan.quota_utilisateurs,
         quota_investigations_actives=plan.quota_investigations_actives,
         profondeur_pivot_max=plan.profondeur_pivot_max,
+        max_points_depart=plan.max_points_depart,
         fonctionnalites=list(plan.fonctionnalites or []),
         url_achat=url_achat,
         est_plan_actuel=plan.code == plan_actuel_code,

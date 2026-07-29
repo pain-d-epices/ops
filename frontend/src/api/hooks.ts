@@ -29,6 +29,7 @@ import type {
   ProfilDetaille,
   ProfilResume,
   PropositionPivot,
+  TypesRecherche,
   Utilisateur,
   VerdictManuel,
 } from "./types";
@@ -58,6 +59,7 @@ export const cles = {
   pivots: (id: string) => ["pivots", id] as const,
   abonnement: () => ["abonnement", organisationActive] as const,
   plans: () => ["plans", organisationActive] as const,
+  typesRecherche: () => ["types-recherche", organisationActive] as const,
   modules: ["modules"] as const,
 };
 
@@ -182,6 +184,20 @@ export function useInvestigation(
       appelerApi<InvestigationDetaillee>(`/investigations/${id}`, options()),
     enabled: Boolean(id),
     ...optionsSupplementaires,
+  });
+}
+
+/**
+ * Types de points de départ acceptés par le serveur, et ceux que le plan autorise.
+ * Ne change qu'au changement de plan : le cache peut être long.
+ */
+export function useTypesRecherche() {
+  return useQuery({
+    queryKey: cles.typesRecherche(),
+    queryFn: () =>
+      appelerApi<TypesRecherche>("/investigations/types-recherche", options()),
+    enabled: Boolean(organisationActive),
+    staleTime: 5 * 60_000,
   });
 }
 

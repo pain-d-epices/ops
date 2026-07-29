@@ -27,7 +27,7 @@ informations exploitables, et restitue l'ensemble sous forme de graphe de relati
 
 ## Ce que fait l'outil
 
-1. **Recherche** — lance [Maigret](https://github.com/soxoj/maigret) sur un pseudonyme et récupère les comptes trouvés.
+1. **Recherche** — lance [Maigret](https://github.com/soxoj/maigret) sur un pseudonyme et récupère les comptes trouvés. Une investigation peut aussi partir de plusieurs éléments à la fois : adresse électronique, numéro de téléphone, adresse d'un compte connu, adresse postale. Le type de chaque élément saisi est **deviné automatiquement**, et reste modifiable.
 2. **Corrèle** — attribue à chaque compte un score de confiance calculé par des règles pondérées (similarité du pseudonyme, avatar identique, adresse partagée, liens réciproques, cohérence des dates), et écarte les faux positifs.
 3. **Enrichit** — applique un module par site pour extraire biographie, avatar, localisation, liens, date de création, autres pseudonymes. Douze sites couverts : GitHub, GitLab, Codeberg, Gitee, Reddit, Mastodon, Bluesky, Hacker News, Dev.to, Keybase, MixCloud, Steam.
 4. **Pivote** — repart automatiquement des informations découvertes (un pseudonyme dans une bio relance une recherche, un lien déclenche un enrichissement direct), dans la limite de la profondeur autorisée.
@@ -59,6 +59,8 @@ Deux garde-fous limitent les faux positifs :
 | Enrichissements / mois | — | 500 | 5000 | 50 000 |
 | Utilisateurs | 1 | 3 | 10 | 50 |
 | Modules par site | ❌ | ✅ | ✅ | ✅ |
+| Recherche par e-mail, téléphone, adresse, compte | ❌ | ✅ | ✅ | ✅ |
+| Éléments de départ par investigation | 1 | 2 | 5 | illimité |
 | Pivot | ❌ | supervisé | automatique | automatique |
 | Profondeur de pivot | 0 | 1 | 3 | 4 |
 | Export CSV / PDF | ❌ | CSV | CSV + PDF | CSV + PDF |
@@ -200,6 +202,22 @@ curl -X POST http://localhost:8000/api/v1/investigations \
 
 Les options envoyées sont **bornées côté serveur** par le plan actif : demander une
 profondeur de 9 sur le palier gratuit enregistrera 0.
+
+Pour partir de plusieurs éléments (plans payants), ajouter `points_depart`. Le champ
+`type` est facultatif : omis, il est déduit de la valeur.
+
+```bash
+curl -X POST http://localhost:8000/api/v1/investigations \
+  -H "Content-Type: application/json" -b cookies.txt \
+  -d '{"pseudo":"le_pseudo_recherche",
+       "points_depart":[{"valeur":"jean.martin@exemple.fr"},
+                        {"valeur":"https://github.com/jeanmartin"},
+                        {"valeur":"+33612345678","type":"telephone"}]}'
+```
+
+Les types acceptés et ceux que le plan autorise se lisent sur
+`GET /api/v1/investigations/types-recherche` — c'est ce que l'interface utilise pour
+construire son formulaire.
 
 ### 3. Suivre la progression en temps réel
 

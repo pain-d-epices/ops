@@ -32,7 +32,8 @@ journal = logging.getLogger(__name__)
 
 class ChercheurCompte(Chercheur):
     nom = "compte"
-    libelle = "Recherche à partir d'un compte connu"
+    libelle = "Adresse d'un compte connu"
+    exemple = "https://github.com/jeanmartin"
     type_point_depart = TypePointDepart.COMPTE.value
     fonctionnalite_requise = "recherche_depuis_compte"
 

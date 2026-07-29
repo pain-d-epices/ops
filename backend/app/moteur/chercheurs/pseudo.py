@@ -23,7 +23,8 @@ journal = logging.getLogger(__name__)
 
 class ChercheurPseudo(Chercheur):
     nom = "pseudo"
-    libelle = "Recherche par pseudonyme"
+    libelle = "Pseudonyme"
+    exemple = "jeanmartin"
     type_point_depart = TypePointDepart.PSEUDO.value
     # Accessible à tous les paliers : c'est la fonctionnalité d'appel du produit
     fonctionnalite_requise = ""

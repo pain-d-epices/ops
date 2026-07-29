@@ -18,6 +18,8 @@ class PlanSortie(BaseModel):
     quota_utilisateurs: int
     quota_investigations_actives: int
     profondeur_pivot_max: int
+    #: points de départ simultanés, pseudonyme compris ; 0 = illimité
+    max_points_depart: int = 1
     fonctionnalites: list[str]
     # Adresse d'achat Gumroad, construite à partir de l'identifiant produit configuré
     url_achat: str | None = None

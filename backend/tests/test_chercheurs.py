@@ -257,3 +257,47 @@ def test_doublons_de_points_depart_ignores():
         assert len(emails) == 1
     finally:
         session.close()
+
+
+# --- Types de recherche exposés à l'interface -------------------------------
+
+
+def test_types_recherche_signale_ce_que_le_plan_gratuit_refuse():
+    """L'interface construit son formulaire à partir de cet endpoint : un type non
+    inclus doit être annoncé comme tel, avec son motif, plutôt que masqué."""
+    client, _ = _client("types_gratuit@test.fr")
+    reponse = client.get("/api/v1/investigations/types-recherche")
+    assert reponse.status_code == 200, reponse.text
+
+    donnees = reponse.json()
+    par_type = {t["type"]: t for t in donnees["types"]}
+
+    # Le pseudonyme est toujours accessible et arrive en premier
+    assert donnees["types"][0]["type"] == "pseudo"
+    assert par_type["pseudo"]["autorise"] is True
+    assert donnees["max_points_depart"] == 1
+
+    for type_point in ("email", "telephone", "adresse", "compte"):
+        assert par_type[type_point]["autorise"] is False
+        assert par_type[type_point]["motif"], f"{type_point} refusé sans motif"
+        # Chaque type propose un exemple de saisie, affiché en aide dans le formulaire
+        assert par_type[type_point]["exemple"]
+
+
+def test_types_recherche_ouverts_des_le_palier_starter():
+    session = FabriqueSession()
+    try:
+        client, organisation_id = _client("types_starter@test.fr")
+        passer_au_plan(session, organisation_id, "starter")
+
+        donnees = client.get("/api/v1/investigations/types-recherche").json()
+        assert donnees["max_points_depart"] == 2
+        assert all(t["autorise"] for t in donnees["types"])
+    finally:
+        session.close()
+
+
+def test_types_recherche_ne_masque_pas_la_route_de_detail():
+    """« types-recherche » ne doit pas être pris pour un identifiant d'investigation."""
+    client, _ = _client("types_route@test.fr")
+    assert client.get("/api/v1/investigations/identifiant-inexistant").status_code == 404

@@ -118,6 +118,31 @@ def lancer_investigation(investigation_id: str) -> dict:
         profil_origine_id=None,
         proposition_id=None,
     )
+    # Le pseudonyme principal est traité par la recherche large ci-dessus, et non par
+    # `traiter_point_depart` : son point de départ resterait donc « en attente » dans
+    # l'interface. On y reporte l'issue réelle pour que tous les éléments fournis
+    # affichent un état cohérent.
+    with portee_session() as session:
+        point_pseudo = (
+            session.query(PointDepart)
+            .filter(
+                PointDepart.investigation_id == investigation_id,
+                PointDepart.type == TypePointDepart.PSEUDO.value,
+            )
+            .order_by(PointDepart.created_at)
+            .first()
+        )
+        if point_pseudo is not None:
+            reussie = resultat.get("statut") == "ok"
+            point_pseudo.statut = "termine" if reussie else "erreur"
+            point_pseudo.nb_comptes_trouves = int(resultat.get("profils_crees") or 0) + int(
+                resultat.get("profils_existants") or 0
+            )
+            point_pseudo.message_erreur = (
+                None if reussie else str(resultat.get("message") or "Recherche interrompue.")[:500]
+            )
+            point_pseudo.traite_le = maintenant()
+
     resultat["points_depart_traites"] = len(points_specialises)
     resultat["pseudos_decouverts"] = pseudos_decouverts[:10]
     return resultat

@@ -41,7 +41,8 @@ LIBELLES_TYPE_LIGNE = {
 
 class ChercheurTelephone(Chercheur):
     nom = "telephone"
-    libelle = "Recherche par numéro de téléphone"
+    libelle = "Numéro de téléphone"
+    exemple = "+33 6 12 34 56 78"
     type_point_depart = TypePointDepart.TELEPHONE.value
     fonctionnalite_requise = "recherche_telephone"
 

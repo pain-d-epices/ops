@@ -29,7 +29,8 @@ URL_BAN = "https://api-adresse.data.gouv.fr/search/"
 
 class ChercheurAdresse(Chercheur):
     nom = "adresse"
-    libelle = "Recherche par adresse postale"
+    libelle = "Adresse postale"
+    exemple = "12 rue des Lilas, 75011 Paris"
     type_point_depart = TypePointDepart.ADRESSE.value
     fonctionnalite_requise = "recherche_adresse"
 

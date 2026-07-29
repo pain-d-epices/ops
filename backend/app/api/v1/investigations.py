@@ -37,6 +37,8 @@ from app.schemas.investigation import (
     InvestigationDetaillee,
     InvestigationResumee,
     PointDepartSortie,
+    TypeRechercheSortie,
+    TypesRechercheSortie,
 )
 from app.securite.dependances import ContexteRequete, contexte_courant, exiger_cgu, exiger_role
 from app.services.journal import journaliser
@@ -272,6 +274,42 @@ def lister_investigations(
         requete = requete.where(Investigation.statut == statut)
     requete = requete.order_by(Investigation.created_at.desc()).limit(limite).offset(decalage)
     return [_resume(i) for i in ctx.session.scalars(requete)]
+
+
+@routeur.get("/types-recherche", response_model=TypesRechercheSortie)
+def lister_types_recherche(
+    ctx: ContexteRequete = Depends(contexte_courant),
+) -> TypesRechercheSortie:
+    """Types de points de départ utilisables, et lesquels le plan autorise.
+
+    Déclaré **avant** la route `/{investigation_id}`, sans quoi FastAPI prendrait
+    « types-recherche » pour un identifiant d'investigation.
+
+    L'interface s'en sert pour construire le formulaire : les types indisponibles
+    (outil absent du serveur) n'apparaissent pas du tout, ceux que le plan ne couvre
+    pas apparaissent grisés avec leur motif. Ajouter un chercheur suffit donc à le
+    faire apparaître dans l'interface, sans y toucher.
+    """
+    from app.moteur.chercheurs.registre import chercheurs_disponibles
+    from app.services.points_depart import chercheur_autorise
+
+    types: list[TypeRechercheSortie] = []
+    for chercheur in chercheurs_disponibles():
+        autorise, motif = chercheur_autorise(chercheur.type_point_depart, ctx.plan)
+        types.append(
+            TypeRechercheSortie(
+                type=chercheur.type_point_depart,
+                libelle=chercheur.libelle,
+                exemple=chercheur.exemple,
+                autorise=autorise,
+                motif=motif,
+            )
+        )
+
+    # Le pseudonyme d'abord (c'est le point de départ obligatoire), puis les autres
+    # par ordre alphabétique de libellé, pour un affichage stable.
+    types.sort(key=lambda t: (t.type != TypePointDepart.PSEUDO.value, t.libelle))
+    return TypesRechercheSortie(types=types, max_points_depart=ctx.plan.max_points_depart)
 
 
 def _detail(ctx: ContexteRequete, investigation: Investigation) -> InvestigationDetaillee:

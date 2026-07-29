@@ -144,14 +144,14 @@ le premier tour, au lieu d'attendre un rebond.
 
 ### Ce que ça implique techniquement
 
-| Élément | Nature du travail |
-|---|---|
-| Table `points_depart` | Nouvelle table (type, valeur), plusieurs par investigation |
-| Abstraction `Chercheur` | Généralisation de ce qui est aujourd'hui codé en dur autour de Maigret : un chercheur par type d'entrée, découvert automatiquement comme les modules |
-| `MaigretRunner` devient `ChercheurPseudo` | Un cas particulier parmi d'autres, sans changement de comportement |
-| Corrélation | Les points de départ multiples deviennent autant de références pour le scoring — amélioration directe de la précision |
-| Interface | Formulaire à entrées multiples, avec détection automatique du type saisi |
-| Gating | `recherche_multi_criteres` réservé aux plans payants |
+| Élément | Nature du travail | État |
+|---|---|---|
+| Table `points_depart` | Nouvelle table (type, valeur), plusieurs par investigation | ✅ fait |
+| Abstraction `Chercheur` | Généralisation de ce qui est aujourd'hui codé en dur autour de Maigret : un chercheur par type d'entrée, découvert automatiquement comme les modules | ✅ fait |
+| `MaigretRunner` devient `ChercheurPseudo` | Un cas particulier parmi d'autres, sans changement de comportement | ✅ fait |
+| Corrélation | Les points de départ multiples deviennent autant de références pour le scoring — amélioration directe de la précision | ✅ fait |
+| Interface | Formulaire à entrées multiples, avec détection automatique du type saisi | ✅ fait |
+| Gating | `recherche_multi_criteres` réservé aux plans payants | ✅ fait |
 
 **Bonne nouvelle** : l'architecture actuelle s'y prête. Le pivot produit déjà des
 entités typées (pseudo, e-mail, lien) et sait quoi en faire. Les points de départ
@@ -259,16 +259,20 @@ continue de se justifier, plutôt que sur l'accès aux types de recherche eux-m�
 ## Ordre de mise en œuvre recommandé
 
 1. **Vague A des modules** — gain immédiat, aucun risque, chaque module est autonome
-2. **`user-scanner` (MIT)** — présence e-mail/pseudo sur ~360 sites, intégrable tel
-   quel comme sous-processus (même patron que Maigret)
-3. **Abstraction `Chercheur`** — prérequis technique de tout le reste
-4. **Points de départ multiples** — la fonctionnalité payante que vous demandez
-5. **Chercheur e-mail** (Gravatar + partie locale + HIBP + `user-scanner`)
-6. **Chercheur téléphone** (libphonenumber + `user-scanner`)
-7. **Chercheur adresse** (Nominatim)
+   *(partiellement fait : Codeberg, Gitee, Bluesky, Dev.to, MixCloud, Steam)*
+2. ✅ **`user-scanner` (MIT)** — présence e-mail/pseudo sur ~360 sites, intégré comme
+   sous-processus (même patron que Maigret)
+3. ✅ **Abstraction `Chercheur`** — prérequis technique de tout le reste
+4. ✅ **Points de départ multiples** — backend, API et interface
+5. ✅ **Chercheur e-mail** (Gravatar + partie locale + `user-scanner`) — HIBP reste à
+   décider (service payant, ~4 $/mois)
+6. ✅ **Chercheur téléphone** (libphonenumber + `user-scanner`)
+7. ✅ **Chercheur adresse** (Nominatim + adresse.data.gouv.fr)
 8. **Discord et X** — connecteurs officiels, selon la demande client réelle
 
-Les étapes 1 et 2 sont indépendantes entre elles et de l'étape 3.
+Reste donc : la suite de la vague A (Lobsters, SourceHut, Last.fm, Wikipédia, Twitch,
+Pixelfed/PeerTube/Lemmy, Ko-fi/Liberapay, Goodreads, Letterboxd), puis les connecteurs
+officiels Discord et X.
 
 ---
 

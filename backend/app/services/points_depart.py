@@ -60,7 +60,8 @@ def chercheur_autorise(type_point_depart: str, plan: Plan) -> tuple[bool, str | 
         return False, f"Aucun outil de recherche disponible pour le type « {type_point_depart} »."
     if chercheur.fonctionnalite_requise and not plan.possede(chercheur.fonctionnalite_requise):
         return False, (
-            f"{chercheur.libelle} n'est pas incluse dans le plan {plan.nom_affiche}."
+            f"La recherche par « {chercheur.libelle.lower()} » n'est pas incluse "
+            f"dans le plan {plan.nom_affiche}."
         )
     return True, None
 

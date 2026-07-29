@@ -7,8 +7,15 @@ import {
   useCreerInvestigation,
   useInvestigations,
   useOrganisation,
+  useTypesRecherche,
 } from "../api/hooks";
 import type { ModePivot } from "../api/types";
+import {
+  problemeLigne,
+  SaisiePointsDepart,
+  typeEffectif,
+  type LignePointDepart,
+} from "../composants/PointsDepart";
 import {
   BadgeStatut,
   BarreProgression,
@@ -46,9 +53,11 @@ function FormulaireInvestigation() {
   const { organisation } = useAuth();
   const { data: parametresOrganisation } = useOrganisation();
   const { data: abonnement } = useAbonnement();
+  const { data: typesRecherche } = useTypesRecherche();
   const creer = useCreerInvestigation();
 
   const [pseudo, setPseudo] = useState("");
+  const [pointsDepart, setPointsDepart] = useState<LignePointDepart[]>([]);
   const [variantes, setVariantes] = useState("");
   const [titre, setTitre] = useState("");
   const [profondeur, setProfondeur] = useState<number | null>(null);
@@ -66,6 +75,11 @@ function FormulaireInvestigation() {
   const quotaRecherches = abonnement?.quotas.find((q) => q.nom === "recherches");
   const quotaEpuise = quotaRecherches?.restant === 0;
 
+  const typesDisponibles = typesRecherche?.types ?? [];
+  // Une ligne en défaut (type non couvert par le plan, ou non pris en charge) bloque
+  // l'envoi : mieux vaut le dire tout de suite que faire échouer la requête.
+  const lignesEnDefaut = pointsDepart.some((l) => problemeLigne(l, typesDisponibles));
+
   const soumettre = async (evenement: FormEvent) => {
     evenement.preventDefault();
     setErreur(null);
@@ -73,6 +87,14 @@ function FormulaireInvestigation() {
     try {
       const investigation = await creer.mutateAsync({
         pseudo: pseudo.trim(),
+        points_depart: pointsDepart
+          .filter((ligne) => ligne.valeur.trim())
+          .map((ligne) => ({
+            valeur: ligne.valeur.trim(),
+            // Le type détecté est envoyé explicitement : l'utilisateur a vu lequel
+            // s'affichait, le serveur ne doit pas en retenir un autre.
+            type: typeEffectif(ligne),
+          })),
         variantes: variantes
           .split(",")
           .map((v) => v.trim())
@@ -141,6 +163,16 @@ function FormulaireInvestigation() {
           Vous pouvez quitter la page, le traitement continue.
         </div>
       </div>
+
+      {typesRecherche && (
+        <SaisiePointsDepart
+          lignes={pointsDepart}
+          onChangement={setPointsDepart}
+          types={typesRecherche.types}
+          maximum={typesRecherche.max_points_depart}
+          nomPlan={plan?.nom_affiche ?? organisation?.plan_nom}
+        />
+      )}
 
       <button
         type="button"
@@ -264,10 +296,16 @@ function FormulaireInvestigation() {
         type="submit"
         className="bouton-principal"
         style={{ width: "100%" }}
-        disabled={creer.isPending || !pseudo.trim() || quotaEpuise}
+        disabled={creer.isPending || !pseudo.trim() || quotaEpuise || lignesEnDefaut}
       >
         {creer.isPending ? <span className="chargement" /> : "Lancer la recherche"}
       </button>
+
+      {lignesEnDefaut && (
+        <div className="aide centre" style={{ marginTop: 10 }}>
+          Corrigez ou retirez les éléments de départ signalés pour lancer la recherche.
+        </div>
+      )}
 
       {quotaRecherches && quotaRecherches.limite !== null && (
         <div className="aide centre" style={{ marginTop: 10 }}>

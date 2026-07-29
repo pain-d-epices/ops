@@ -7,6 +7,7 @@ import {
   useInvestigation,
   useSupprimerInvestigation,
 } from "../api/hooks";
+import type { PointDepartSortie } from "../api/types";
 import { PanneauDetail } from "../composants/graphe/PanneauDetail";
 import { PropositionsPivotListe } from "../composants/PropositionsPivot";
 import { TableauProfils } from "../composants/TableauProfils";
@@ -164,6 +165,10 @@ export function PageInvestigation() {
         </div>
       )}
 
+      {investigation.points_depart.length > 1 && (
+        <PointsDepartInvestigation points={investigation.points_depart} />
+      )}
+
       {enCours && (
         <div className="carte" style={{ marginBottom: 18 }}>
           <div className="ligne-espacee" style={{ marginBottom: 8 }}>
@@ -304,6 +309,63 @@ export function PageInvestigation() {
               ))}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const LIBELLE_TYPE_DEPART: Record<string, string> = {
+  pseudo: "pseudonyme",
+  compte: "compte",
+  email: "e-mail",
+  telephone: "téléphone",
+  adresse: "adresse",
+  nom: "nom",
+  domaine: "domaine",
+};
+
+/**
+ * Éléments dont est partie l'investigation, avec l'issue de chacun. Affiché
+ * uniquement quand il y en a plusieurs : sur une recherche par pseudonyme seul,
+ * l'information est déjà dans le titre.
+ */
+function PointsDepartInvestigation({ points }: { points: PointDepartSortie[] }) {
+  return (
+    <div className="carte" style={{ marginBottom: 18 }}>
+      <div className="carte-titre">
+        <h3 style={{ fontSize: 15 }}>Points de départ</h3>
+        <span className="petit attenue">{points.length} éléments</span>
+      </div>
+
+      <div className="liste-points-depart">
+        {points.map((point) => {
+          const enDefaut = point.statut === "erreur" || point.statut === "non_autorise";
+          return (
+            <div
+              key={point.id}
+              className={`puce-point-depart${enDefaut ? " en-erreur" : ""}`}
+              title={point.message_erreur ?? undefined}
+            >
+              <span className="type-point-depart">
+                {LIBELLE_TYPE_DEPART[point.type] ?? point.type}
+              </span>
+              <span className="mono">{point.valeur}</span>
+              <span className="attenue petit">
+                {point.statut === "termine" && `${point.nb_comptes_trouves} compte(s)`}
+                {point.statut === "en_cours" && "en cours…"}
+                {point.statut === "en_attente" && "en attente"}
+                {point.statut === "erreur" && "échec"}
+                {point.statut === "non_autorise" && "non inclus dans le plan"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {points.some((p) => p.message_erreur) && (
+        <div className="aide" style={{ marginTop: 10 }}>
+          {points.find((p) => p.message_erreur)?.message_erreur}
         </div>
       )}
     </div>

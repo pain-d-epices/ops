@@ -89,6 +89,54 @@ export interface InvestigationResumee {
   supprimer_apres: string | null;
 }
 
+/** Types de points de départ acceptés, alignés sur TypePointDepart côté backend. */
+export type TypePointDepart =
+  | "pseudo"
+  | "compte"
+  | "email"
+  | "telephone"
+  | "adresse"
+  | "nom"
+  | "domaine";
+
+export type StatutPointDepart =
+  | "en_attente"
+  | "en_cours"
+  | "termine"
+  | "erreur"
+  | "non_autorise";
+
+export interface PointDepartEntree {
+  valeur: string;
+  /** Omis, le type est deviné par le serveur. */
+  type?: TypePointDepart | null;
+}
+
+export interface PointDepartSortie {
+  id: string;
+  type: TypePointDepart;
+  valeur: string;
+  statut: StatutPointDepart;
+  message_erreur: string | null;
+  nb_comptes_trouves: number;
+  detail: Record<string, unknown>;
+}
+
+/** Un type de recherche proposé au formulaire, et son accessibilité selon le plan. */
+export interface TypeRecherche {
+  type: TypePointDepart;
+  libelle: string;
+  exemple: string;
+  autorise: boolean;
+  motif: string | null;
+}
+
+export interface TypesRecherche {
+  types: TypeRecherche[];
+  /** Points de départ simultanés, pseudonyme compris ; 0 = illimité. */
+  max_points_depart: number;
+}
+
 export interface InvestigationDetaillee extends InvestigationResumee {
   variantes: string[];
   options: Record<string, unknown>;
@@ -97,10 +145,12 @@ export interface InvestigationDetaillee extends InvestigationResumee {
   nb_noeuds: number;
   nb_aretes: number;
   nb_propositions_en_attente: number;
+  points_depart: PointDepartSortie[];
 }
 
 export interface DemandeInvestigation {
   pseudo: string;
+  points_depart?: PointDepartEntree[];
   variantes?: string[];
   titre?: string | null;
   profondeur_pivot?: number | null;
@@ -228,6 +278,8 @@ export interface Plan {
   quota_utilisateurs: number;
   quota_investigations_actives: number;
   profondeur_pivot_max: number;
+  /** Points de départ simultanés, pseudonyme compris ; 0 = illimité. */
+  max_points_depart: number;
   fonctionnalites: string[];
   url_achat: string | null;
   est_plan_actuel: boolean;

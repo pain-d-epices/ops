@@ -40,7 +40,8 @@ DOMAINES_JETABLES = {
 
 class ChercheurEmail(Chercheur):
     nom = "email"
-    libelle = "Recherche par adresse électronique"
+    libelle = "Adresse électronique"
+    exemple = "jean.martin@exemple.fr"
     type_point_depart = TypePointDepart.EMAIL.value
     fonctionnalite_requise = "recherche_email"
 

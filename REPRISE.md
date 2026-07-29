@@ -9,7 +9,18 @@ pseudonymes, PostgreSQL, Redis, worker Celery, interface dans le navigateur). To
 fonctionne : inscription, recherche, corrélation, enrichissement, rebond automatique,
 graphe, explication des scores, exports, quotas et gating par plan.
 
-72 tests automatisés au vert.
+106 tests automatisés au vert.
+
+### Points de départ multiples — disponibles dans l'interface
+
+Une investigation peut désormais partir de plusieurs éléments à la fois : pseudonyme,
+adresse électronique, numéro de téléphone, adresse d'un compte connu, adresse postale.
+Le type est deviné à la frappe et reste modifiable ; les types non inclus dans le plan
+sont signalés avant l'envoi plutôt que refusés après.
+
+Vérifié en conditions réelles le 29/07/2026 : investigation lancée sur le pseudonyme
+`soxoj` + l'adresse `soxoj@protonmail.com` → 17 comptes par le pseudonyme, 12 par
+l'adresse, 29 comptes après déduplication.
 
 ## Relancer le projet
 

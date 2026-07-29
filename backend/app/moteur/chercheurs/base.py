@@ -84,6 +84,8 @@ class Chercheur(ABC):
     nom: str = ""
     #: libellé affiché dans l'interface
     libelle: str = ""
+    #: exemple de saisie, affiché en aide dans le formulaire
+    exemple: str = ""
     #: type de point de départ traité (voir TypePointDepart)
     type_point_depart: str = ""
     #: code de fonctionnalité exigé dans le plan de l'organisation ; vide = accessible à tous

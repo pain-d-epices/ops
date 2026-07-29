@@ -27,6 +27,23 @@ class PointDepartSortie(BaseModel):
     detail: dict[str, Any] = {}
 
 
+class TypeRechercheSortie(BaseModel):
+    """Un type de point de départ proposé à la saisie, et son accessibilité."""
+
+    type: str
+    libelle: str
+    exemple: str
+    autorise: bool
+    #: motif du refus quand le plan ne couvre pas ce type
+    motif: str | None = None
+
+
+class TypesRechercheSortie(BaseModel):
+    types: list[TypeRechercheSortie]
+    #: nombre d'éléments de départ acceptés, pseudonyme compris ; 0 = illimité
+    max_points_depart: int
+
+
 class DemandeInvestigation(BaseModel):
     pseudo: str = Field(min_length=2, max_length=200)
     # Éléments complémentaires : adresse électronique, téléphone, compte, adresse.
