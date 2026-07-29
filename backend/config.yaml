@@ -81,8 +81,12 @@ maigret:
   # Nombre de sites scannés par défaut (les N plus pertinents). 0 = tous (~3000, très long)
   top_sites: 500
   timeout_par_site: 20
-  # Délai maximal d'une exécution complète, en secondes
-  timeout_global: 900
+  # Délai maximal d'une exécution complète, en secondes.
+  # Mesures réelles : 50 sites en 25 s, 500 sites en 133 s (~0,25 s par site).
+  # Une recherche sur la totalité des ~3000 sites demande donc environ 13 minutes :
+  # 30 minutes laissent la marge nécessaire sans qu'une recherche complète soit
+  # tronquée par le délai.
+  timeout_global: 1800
   # Ne conserver que les résultats "trouvé" (ignore les milliers de "non trouvé")
   ignorer_non_trouves: true
   # Nombre de requêtes simultanées de Maigret (baisser si l'IP se fait limiter)

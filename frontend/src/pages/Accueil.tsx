@@ -19,6 +19,19 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { depuis, formaterNombre } from "../utilitaires/format";
 
+/**
+ * Durée approximative d'une recherche, calibrée sur des mesures réelles :
+ * 50 sites en 25 s, 500 sites en 133 s — soit environ 0,25 s par site, plus une
+ * dizaine de secondes de démarrage. Mieux vaut une estimation qui suit le réglage
+ * choisi qu'une fourchette figée qui se trompe dans les deux sens.
+ */
+function dureeEstimee(nombreSites: number): string {
+  const secondes = 10 + nombreSites * 0.25;
+  if (secondes < 60) return `environ ${Math.round(secondes / 10) * 10} secondes`;
+  const minutes = Math.max(1, Math.round(secondes / 60));
+  return `environ ${minutes} minute${minutes > 1 ? "s" : ""}`;
+}
+
 export function PageAccueil() {
   return (
     <div className="grille-tableau-bord">
@@ -124,7 +137,8 @@ function FormulaireInvestigation() {
           autoFocus
         />
         <div className="aide">
-          La recherche porte sur plusieurs centaines de sites. Comptez 2 à 10 minutes.
+          Recherche sur {formaterNombre(nombreSites)} sites — {dureeEstimee(nombreSites)}.
+          Vous pouvez quitter la page, le traitement continue.
         </div>
       </div>
 
@@ -218,11 +232,11 @@ function FormulaireInvestigation() {
               value={nombreSites}
               onChange={(e) => setNombreSites(Number(e.target.value))}
             >
-              <option value={50}>50 — les plus fréquentés (environ 1 minute)</option>
-              <option value={200}>200 (environ 3 minutes)</option>
-              <option value={500}>500 — recommandé (environ 6 minutes)</option>
-              <option value={1000}>1000 (environ 12 minutes)</option>
-              <option value={3000}>Tous les sites (long, plus de 20 minutes)</option>
+              <option value={50}>50 — les plus fréquentés (environ 25 secondes)</option>
+              <option value={200}>200 (environ 1 minute)</option>
+              <option value={500}>500 — recommandé (environ 2 minutes)</option>
+              <option value={1000}>1000 (environ 4 minutes)</option>
+              <option value={3000}>Tous les sites (environ 13 minutes)</option>
             </select>
             <div className="aide">
               C'est le principal levier sur la durée d'une recherche. Les sites sont
