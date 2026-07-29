@@ -51,6 +51,28 @@ const LIBELLES_TYPE: Record<TypeNoeud, string> = {
   entreprise: "Entreprise",
 };
 
+/**
+ * Forme géométrique par type de nœud.
+ *
+ * La couleur seule ne suffit pas à distinguer une dizaine de catégories : elle se
+ * confond vite sur un graphe dense, et reste inaccessible aux daltoniens. La forme
+ * donne un second signal, lisible même en petit et en noir et blanc.
+ */
+type FormeNoeud = cytoscape.Css.NodeShape;
+
+const FORMES_NOEUD: Record<TypeNoeud, FormeNoeud> = {
+  pseudo: "star",              // le point de départ de l'investigation
+  compte: "ellipse",           // le plus fréquent : forme neutre
+  email: "diamond",            // information forte, très identifiante
+  pseudo_alt: "tag",           // mène à une nouvelle recherche
+  nom: "hexagon",
+  localisation: "round-rectangle",
+  lien: "vee",
+  avatar: "octagon",
+  telephone: "rhomboid",
+  entreprise: "barrel",
+};
+
 /** Couleur d'un compte selon son score : même code que les badges des tableaux. */
 function couleurScore(score: number): string {
   if (score >= 70) return "#3fb950";
@@ -59,9 +81,26 @@ function couleurScore(score: number): string {
 }
 
 function tailleNoeud(type: TypeNoeud, score: number): number {
-  if (type === "pseudo") return 46;
-  if (type === "compte") return 22 + (score / 100) * 22; // 22 à 44 px selon le score
-  return 20;
+  if (type === "pseudo") return 52;
+  if (type === "compte") return 24 + (score / 100) * 22; // 24 à 46 px selon le score
+  return 22;
+}
+
+/**
+ * Paramètres de disposition adaptés à la densité du graphe.
+ *
+ * Une investigation peut produire cinq nœuds comme deux cents. Des valeurs fixes
+ * donnent soit un graphe perdu dans le vide, soit — bien plus gênant — une pelote
+ * illisible. L'espacement croît donc avec le nombre de nœuds.
+ */
+function parametresDisposition(nombreNoeuds: number) {
+  const facteur = Math.min(3, Math.max(1, Math.sqrt(nombreNoeuds / 25)));
+  return {
+    nodeSeparation: Math.round(90 * facteur),
+    idealEdgeLength: Math.round(95 * facteur),
+    nodeRepulsion: Math.round(6500 * facteur * 1.6),
+    gravity: nombreNoeuds > 80 ? 0.15 : 0.25, // moins de gravité = moins d'agglutination
+  };
 }
 
 interface Proprietes {
@@ -111,15 +150,25 @@ export function GrapheInvestigation({
             color: "#e6edf3",
             "font-size": "10px",
             "text-valign": "bottom",
-            "text-margin-y": 5,
+            "text-margin-y": 6,
             "text-wrap": "ellipsis",
             "text-max-width": "110px",
+            // Contour sombre autour du texte : le libellé reste lisible même
+            // lorsqu'il chevauche une arête ou un autre nœud.
+            "text-outline-color": "#0f1216",
+            "text-outline-width": 2,
             "border-width": 2,
             "border-color": "data(couleurBordure)",
             "transition-property": "border-width, border-color",
             "transition-duration": 120,
           },
         },
+        // Une règle par type : la forme ne peut pas être pilotée par `data()`,
+        // Cytoscape n'acceptant qu'une valeur littérale pour cette propriété.
+        ...Object.entries(FORMES_NOEUD).map(([type, forme]) => ({
+          selector: `node[type="${type}"]`,
+          style: { shape: forme },
+        })),
         {
           selector: "node.selectionne",
           style: {
@@ -246,23 +295,55 @@ export function GrapheInvestigation({
 
     if (nouveauxElements.length === 0) return;
 
+    const premierRendu = identifiantsConnus.current.size === 0;
     cy.add(nouveauxElements);
     identifiantsVisibles.forEach((id) => identifiantsConnus.current.add(id));
 
-    // La disposition n'est recalculée que lorsque de nouveaux éléments arrivent.
+    // Cytoscape mesure son conteneur à la création. Comme le graphe est monté dans
+    // un onglet, ses dimensions peuvent avoir changé depuis : sans ce resize, la
+    // disposition se calcule sur une surface erronée et tous les nœuds se tassent.
+    cy.resize();
+
+    const reglages = parametresDisposition(cy.nodes().length);
+
     cy.layout({
       name: "fcose",
-      quality: "default",
-      animate: true,
+      // Au premier rendu on soigne la disposition (c'est ce que l'analyste voit en
+      // ouvrant le graphe) ; ensuite on privilégie la rapidité pour ne pas figer
+      // l'écran à chaque nouveau compte trouvé.
+      quality: premierRendu ? "proof" : "default",
+      animate: !premierRendu,
       animationDuration: 380,
-      randomize: false,       // conserve au mieux les positions existantes
-      nodeSeparation: 90,
-      idealEdgeLength: 95,
-      nodeRepulsion: 6500,
-      padding: 40,
-      fit: cy.nodes().length <= nouveauxElements.length, // ne recentre qu'au premier rendu
+      // Au premier rendu, on part d'un placement aléatoire : fcose obtient un bien
+      // meilleur résultat que depuis des positions initiales toutes identiques.
+      randomize: premierRendu,
+      ...reglages,
+      padding: 50,
+      fit: premierRendu,
     } as cytoscape.LayoutOptions).run();
   }, [graphe, typesMasques, pret]);
+
+  // --- Réorganisation à l'ouverture -----------------------------------------
+  // Le composant est démonté quand on quitte l'onglet Graphe. À chaque retour, on
+  // repart donc d'une disposition propre et ajustée à la taille de la fenêtre,
+  // plutôt que d'un amas hérité d'un conteneur qui n'avait pas la bonne dimension.
+  useEffect(() => {
+    const cy = instance.current;
+    if (!cy || !pret) return;
+
+    const ajuster = () => {
+      if (!instance.current || instance.current.nodes().length === 0) return;
+      instance.current.resize();
+      instance.current.fit(instance.current.elements(), 50);
+    };
+
+    const minuterie = window.setTimeout(ajuster, 450);
+    window.addEventListener("resize", ajuster);
+    return () => {
+      window.clearTimeout(minuterie);
+      window.removeEventListener("resize", ajuster);
+    };
+  }, [pret]);
 
   // --- Mise en évidence de la sélection -------------------------------------
   useEffect(() => {
@@ -285,18 +366,19 @@ export function GrapheInvestigation({
   };
 
   const reorganiser = () => {
-    instance.current
-      ?.layout({
-        name: "fcose",
-        quality: "proof",
-        animate: true,
-        animationDuration: 500,
-        randomize: true,
-        nodeSeparation: 90,
-        idealEdgeLength: 95,
-        padding: 40,
-      } as cytoscape.LayoutOptions)
-      .run();
+    const cy = instance.current;
+    if (!cy) return;
+    cy.resize();
+    cy.layout({
+      name: "fcose",
+      quality: "proof",
+      animate: true,
+      animationDuration: 500,
+      randomize: true,
+      ...parametresDisposition(cy.nodes().length),
+      padding: 50,
+      fit: true,
+    } as cytoscape.LayoutOptions).run();
   };
 
   return (
@@ -357,6 +439,7 @@ export function GrapheInvestigation({
       <div ref={conteneur} className="toile-graphe" />
 
       <div className="legende">
+        {/* Couleur = niveau de confiance du compte */}
         <div className="legende-entree">
           <span className="legende-pastille" style={{ background: "#3fb950" }} />
           Confiance élevée
@@ -369,18 +452,32 @@ export function GrapheInvestigation({
           <span className="legende-pastille" style={{ background: "#8b949e" }} />
           Faible
         </div>
-        <div className="legende-entree">
-          <span className="legende-pastille" style={{ background: COULEURS_NOEUD.pseudo }} />
-          Pseudonyme
+
+        {/* Forme = nature de l'élément, lisible indépendamment de la couleur */}
+        <div className="legende-entree" style={{ width: "100%", marginTop: 4 }}>
+          {(
+            [
+              ["★", "pseudo", "Pseudonyme"],
+              ["●", "compte", "Compte"],
+              ["◆", "email", "E-mail"],
+              ["⬔", "pseudo_alt", "Autre pseudo"],
+              ["⬢", "nom", "Nom"],
+              ["▭", "localisation", "Lieu"],
+              ["∨", "lien", "Lien"],
+            ] as const
+          ).map(([symbole, type, libelle]) => (
+            <span
+              key={type}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, marginRight: 12 }}
+            >
+              <span style={{ color: COULEURS_NOEUD[type as TypeNoeud], fontSize: 13 }}>
+                {symbole}
+              </span>
+              {libelle}
+            </span>
+          ))}
         </div>
-        <div className="legende-entree">
-          <span className="legende-pastille" style={{ background: COULEURS_NOEUD.email }} />
-          E-mail
-        </div>
-        <div className="legende-entree">
-          <span className="legende-pastille" style={{ background: COULEURS_NOEUD.lien }} />
-          Lien
-        </div>
+
         <div className="legende-entree" style={{ width: "100%", color: "var(--texte-faible)" }}>
           La taille d'un compte reflète son score. Cliquez sur un nœud pour le détail.
         </div>
