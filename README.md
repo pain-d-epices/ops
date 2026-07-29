@@ -29,7 +29,7 @@ informations exploitables, et restitue l'ensemble sous forme de graphe de relati
 
 1. **Recherche** — lance [Maigret](https://github.com/soxoj/maigret) sur un pseudonyme et récupère les comptes trouvés. Une investigation peut aussi partir de plusieurs éléments à la fois : adresse électronique, numéro de téléphone, adresse d'un compte connu, adresse postale. Le type de chaque élément saisi est **deviné automatiquement**, et reste modifiable.
 2. **Corrèle** — attribue à chaque compte un score de confiance calculé par des règles pondérées (similarité du pseudonyme, avatar identique, adresse partagée, liens réciproques, cohérence des dates), et écarte les faux positifs.
-3. **Enrichit** — applique un module par site pour extraire biographie, avatar, localisation, liens, date de création, autres pseudonymes. Douze sites couverts : GitHub, GitLab, Codeberg, Gitee, Reddit, Mastodon, Bluesky, Hacker News, Dev.to, Keybase, MixCloud, Steam.
+3. **Enrichit** — applique un module par site pour extraire biographie, avatar, localisation, liens, date de création, autres pseudonymes. Vingt-deux sites couverts : GitHub, GitLab, Codeberg, Gitee, Reddit, Mastodon, Pixelfed, PeerTube, Lemmy, Bluesky, Hacker News, Dev.to, Keybase, MixCloud, Steam, Lobsters, Wikipédia, Liberapay, Goodreads, Letterboxd, Last.fm, Twitch (ces deux derniers nécessitent une clé API gratuite).
 4. **Pivote** — repart automatiquement des informations découvertes (un pseudonyme dans une bio relance une recherche, un lien déclenche un enrichissement direct), dans la limite de la profondeur autorisée.
 5. **Visualise** — restitue le tout en graphe interactif : nœuds = identités et informations, arêtes = relations découvertes.
 
@@ -270,6 +270,10 @@ Réglages les plus utiles dans `config.yaml` :
 
 - `GITHUB_TOKEN` : fait passer la limite de 60 à 5000 requêtes par heure. Fortement
   recommandé dès que plusieurs clients utilisent le service.
+- `LASTFM_API_KEY` : gratuite ([last.fm/api/account/create](https://www.last.fm/api/account/create)),
+  sans laquelle le module Last.fm reste simplement inactif.
+- `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` : application gratuite
+  ([dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps)), même principe.
 
 ---
 
@@ -334,8 +338,9 @@ votre-domaine.fr {
 cd backend && pytest -q
 ```
 
-69 tests couvrent le moteur de corrélation, les modules de site, les quotas et le
-gating par plan, l'isolation entre organisations, et le cycle complet d'investigation.
+124 tests couvrent le moteur de corrélation, les modules de site, les chercheurs et
+points de départ multiples, les quotas et le gating par plan, l'isolation entre
+organisations, et le cycle complet d'investigation.
 Aucun n'exige de réseau, de PostgreSQL ni de Redis : ils tournent sur SQLite avec un
 Maigret simulé.
 
@@ -361,7 +366,7 @@ Les tests les plus importants à ne jamais laisser échouer :
 
 ## État du projet
 
-**Application complète et vérifiée de bout en bout** (72 tests automatisés, migration
+**Application complète et vérifiée de bout en bout** (124 tests automatisés, migration
 validée sur PostgreSQL 16).
 
 Parcours réellement exécuté le 29/07/2026, avec Maigret sur de vrais pseudonymes :

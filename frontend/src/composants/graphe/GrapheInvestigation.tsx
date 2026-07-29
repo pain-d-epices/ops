@@ -74,6 +74,29 @@ const FORMES_NOEUD: Record<TypeNoeud, FormeNoeud> = {
   entreprise: "barrel",
 };
 
+/**
+ * Décalage du centre de l'icône par rapport au centre géométrique du nœud.
+ *
+ * Cytoscape centre l'image de fond sur le cadre (bounding box) de la forme, pas sur
+ * son centre visuel — or plusieurs formes ne remplissent pas ce cadre symétriquement.
+ * Calculé à partir des points de définition de chaque forme dans Cytoscape même
+ * (`generatePolygon`) :
+ *
+ * - « tag » (pseudo_alt) : [-1,-1, 0.25,-1, 1,0, 0.25,1, -1,1] — le corps rectangulaire
+ *   occupe la partie gauche du cadre, la pointe déporte le reste à droite. Centroïde
+ *   réel à x ≈ -17 % du centre : l'icône doit être décalée vers la gauche.
+ * - « vee » (lien) : [-1,-1, 0,-0.333, 1,-1, 0,1] — un chevron dont la base large est
+ *   en haut et la pointe en bas. Centroïde réel à y ≈ -11 % du centre : l'icône doit
+ *   être décalée vers le haut.
+ *
+ * Le rhomboïde (téléphone) est un parallélogramme, point-symétrique par construction :
+ * son centroïde coïncide exactement avec le centre du cadre, aucun décalage requis.
+ */
+const DECALAGE_ICONE: Partial<Record<TypeNoeud, { x?: string; y?: string }>> = {
+  pseudo_alt: { x: "42%" },
+  lien: { y: "45%" },
+};
+
 /** Couleur d'un compte selon son score : même code que les badges des tableaux. */
 function couleurScore(score: number): string {
   if (score >= 70) return "#3fb950";
@@ -86,7 +109,7 @@ function tailleNoeud(type: TypeNoeud, score: number): number {
   if (type === "compte") return 30 + (score / 100) * 24; // 30 à 54 px selon le score
   // Les nœuds d'information portent un pictogramme : en dessous de cette taille,
   // le dessin devient une tache indistincte.
-  return 34;
+  return 42;
 }
 
 /**
@@ -194,24 +217,27 @@ export function GrapheInvestigation({
         },
         // Une règle par type : ni la forme ni l'icône ne peuvent être pilotées par
         // `data()`, Cytoscape n'acceptant que des valeurs littérales ici.
-        ...Object.entries(FORMES_NOEUD).map(([type, forme]) => ({
-          selector: `node[type="${type}"]`,
-          style: {
-            shape: forme,
-            ...(ICONES_TYPE[type as TypeNoeud]
-              ? {
-                  "background-image": ICONES_TYPE[type as TypeNoeud] as string,
-                  "background-fit": "none" as const,
-                  // Le pictogramme occupe la majeure partie du nœud : plus petit,
-                  // il n'est plus identifiable une fois le graphe dézoomé.
-                  "background-width": "68%",
-                  "background-height": "68%",
-                  "background-position-x": "50%",
-                  "background-position-y": "50%",
-                }
-              : {}),
-          },
-        })),
+        ...Object.entries(FORMES_NOEUD).map(([type, forme]) => {
+          const decalage = DECALAGE_ICONE[type as TypeNoeud];
+          return {
+            selector: `node[type="${type}"]`,
+            style: {
+              shape: forme,
+              ...(ICONES_TYPE[type as TypeNoeud]
+                ? {
+                    "background-image": ICONES_TYPE[type as TypeNoeud] as string,
+                    "background-fit": "none" as const,
+                    // Le pictogramme occupe la majeure partie du nœud : plus petit,
+                    // il n'est plus identifiable une fois le graphe dézoomé.
+                    "background-width": "82%",
+                    "background-height": "82%",
+                    "background-position-x": decalage?.x ?? "50%",
+                    "background-position-y": decalage?.y ?? "50%",
+                  }
+                : {}),
+            },
+          };
+        }),
         STYLE_COMPTE_AVEC_FAVICON,
         {
           selector: "node.selectionne",
@@ -522,15 +548,15 @@ export function GrapheInvestigation({
               <span
                 style={{
                   display: "inline-flex",
-                  width: 16,
-                  height: 16,
-                  borderRadius: 4,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 5,
                   background: COULEURS_NOEUD[type],
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <img src={ICONES_TYPE[type]} alt="" width={11} height={11} />
+                <img src={ICONES_TYPE[type]} alt="" width={15} height={15} />
               </span>
               {libelle}
             </span>

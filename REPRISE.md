@@ -9,7 +9,7 @@ pseudonymes, PostgreSQL, Redis, worker Celery, interface dans le navigateur). To
 fonctionne : inscription, recherche, corrélation, enrichissement, rebond automatique,
 graphe, explication des scores, exports, quotas et gating par plan.
 
-106 tests automatisés au vert.
+124 tests automatisés au vert.
 
 ### Points de départ multiples — disponibles dans l'interface
 
@@ -21,6 +21,30 @@ sont signalés avant l'envoi plutôt que refusés après.
 Vérifié en conditions réelles le 29/07/2026 : investigation lancée sur le pseudonyme
 `soxoj` + l'adresse `soxoj@protonmail.com` → 17 comptes par le pseudonyme, 12 par
 l'adresse, 29 comptes après déduplication.
+
+### Suite de la vague A des modules (29/07/2026)
+
+Dix modules d'enrichissement supplémentaires : Lobsters, Wikipédia, Liberapay,
+Goodreads, Letterboxd (aucune clé requise), Last.fm et Twitch (clé gratuite à
+configurer dans `.env`, sinon le module reste simplement inactif), Pixelfed,
+PeerTube, Lemmy (fédivers, même principe que Mastodon). Vingt-deux modules au total.
+SourceHut, Telegram et Ko-fi ont été examinés et écartés faute d'API publique
+adaptée — détail dans [docs/ajouter-un-module.md](docs/ajouter-un-module.md).
+
+### Autres corrections du jour
+
+- Le bandeau d'avertissement légal en haut de chaque page a été retiré.
+- Le message d'erreur d'enrichissement (« Aucun module ne couvre le site ») restait
+  affiché en changeant de nœud sélectionné dans le graphe, tant qu'aucune nouvelle
+  erreur ne survenait. Corrigé en forçant le remontage du panneau de détail à chaque
+  changement de sélection.
+- Icônes des nœuds du graphe agrandies et recentrées. Deux formes (« tag » pour les
+  pseudonymes alternatifs, « vee » pour les liens) ne centraient pas leur pictogramme
+  sur leur centre visuel réel — corrigé par calcul géométrique exact à partir des
+  définitions de forme de Cytoscape. **Non vérifié visuellement cette session** : le
+  panneau de navigateur intégré n'était pas affiché côté utilisateur, empêchant toute
+  capture d'écran. À confirmer visuellement à la prochaine ouverture d'une
+  investigation avec plusieurs types de nœuds.
 
 ## Relancer le projet
 
