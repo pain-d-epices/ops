@@ -8,22 +8,25 @@ export function PageConnexion() {
   const [email, setEmail] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
   const [erreur, setErreur] = useState<string | null>(null);
+  const [serveurInjoignable, setServeurInjoignable] = useState(false);
   const connexion = useConnexion();
 
   const soumettre = async (evenement: FormEvent) => {
     evenement.preventDefault();
     setErreur(null);
+    setServeurInjoignable(false);
     try {
       await connexion.mutateAsync({ email, mot_de_passe: motDePasse });
       // Rechargement complet : le contexte d'authentification et tous les caches
       // repartent proprement avec la nouvelle session.
       window.location.href = "/";
     } catch (exception) {
-      setErreur(
-        exception instanceof ErreurApi
-          ? exception.message
-          : "Connexion impossible. Vérifiez que le serveur est démarré.",
-      );
+      if (exception instanceof ErreurApi) {
+        setErreur(exception.message);
+        setServeurInjoignable(exception.estServeurInjoignable);
+      } else {
+        setErreur("Connexion impossible.");
+      }
     }
   };
 
@@ -43,6 +46,15 @@ export function PageConnexion() {
           {erreur && (
             <div className="message message-erreur" style={{ marginBottom: 16 }}>
               {erreur}
+              {/* Cas fréquent en développement local : l'API n'est pas lancée.
+                  On donne la marche à suivre plutôt qu'un code d'erreur. */}
+              {serveurInjoignable && (
+                <div className="petit" style={{ marginTop: 8, opacity: 0.85 }}>
+                  Le service de recherche doit être démarré en parallèle de cette
+                  interface. Voir <code>REPRISE.md</code> à la racine du projet pour les
+                  commandes à lancer.
+                </div>
+              )}
             </div>
           )}
 

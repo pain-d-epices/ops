@@ -8,6 +8,10 @@
 
 const BASE = "/api/v1";
 
+/** Message unique pour tous les cas « le backend ne répond pas ». */
+export const MESSAGE_SERVEUR_INJOIGNABLE =
+  "Le serveur ne répond pas. Vérifiez qu'il est bien démarré, puis réessayez.";
+
 /** Erreur d'API portant le code HTTP et le code métier renvoyé par le backend. */
 export class ErreurApi extends Error {
   constructor(
@@ -32,6 +36,11 @@ export class ErreurApi extends Error {
 
   get estNonAuthentifie(): boolean {
     return this.statut === 401;
+  }
+
+  /** Le backend n'a pas répondu : il est arrêté, ou injoignable depuis le navigateur. */
+  get estServeurInjoignable(): boolean {
+    return this.code === "serveur_injoignable";
   }
 }
 
@@ -112,12 +121,18 @@ async function executerRequete<T>(
     entetes["X-Organisation"] = organisationId;
   }
 
-  const reponse = await fetch(construireUrl(chemin, parametres), {
-    method: methode,
-    headers: entetes,
-    body: corps !== undefined ? JSON.stringify(corps) : undefined,
-    credentials: "include",
-  });
+  let reponse: Response;
+  try {
+    reponse = await fetch(construireUrl(chemin, parametres), {
+      method: methode,
+      headers: entetes,
+      body: corps !== undefined ? JSON.stringify(corps) : undefined,
+      credentials: "include",
+    });
+  } catch {
+    // Échec réseau avant même d'obtenir une réponse : serveur éteint, coupure réseau.
+    throw new ErreurApi(MESSAGE_SERVEUR_INJOIGNABLE, 0, "serveur_injoignable");
+  }
 
   // Jeton d'accès expiré : on le renouvelle et on rejoue la requête, une seule fois.
   // Les routes d'authentification elles-mêmes sont exclues, sous peine de boucle.
@@ -143,6 +158,15 @@ async function executerRequete<T>(
 
   if (!reponse.ok) {
     const donnees = (estJson ? contenu : null) as Record<string, unknown> | null;
+
+    // Une erreur 5xx sans corps JSON ne vient pas de l'application : c'est le
+    // serveur de développement (ou le reverse proxy) qui n'a pas pu joindre l'API.
+    // Le distinguer évite d'afficher « erreur 500 » à quelqu'un dont le backend
+    // n'est simplement pas démarré.
+    if (reponse.status >= 500 && !donnees) {
+      throw new ErreurApi(MESSAGE_SERVEUR_INJOIGNABLE, reponse.status, "serveur_injoignable");
+    }
+
     const message =
       (typeof donnees?.detail === "string" && donnees.detail) ||
       messageParDefaut(reponse.status);

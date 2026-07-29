@@ -42,9 +42,7 @@ export function PageInscription() {
       window.location.href = "/";
     } catch (exception) {
       setErreur(
-        exception instanceof ErreurApi
-          ? exception.message
-          : "Inscription impossible. Vérifiez que le serveur est démarré.",
+        exception instanceof ErreurApi ? exception.message : "Inscription impossible.",
       );
     }
   };
