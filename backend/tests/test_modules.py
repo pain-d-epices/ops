@@ -19,6 +19,15 @@ from app.modules.reddit import ModuleReddit
 from app.modules.registre import charger_modules, module_pour_domaine, modules_disponibles
 
 
+class FauxReponse:
+    """Simule la réponse brute d'httpx, pour les modules qui lisent du texte (RSS/XML)
+    plutôt que du JSON."""
+
+    def __init__(self, status_code: int, text: str):
+        self.status_code = status_code
+        self.text = text
+
+
 class FauxClient:
     """Client HTTP simulé : renvoie des réponses prédéfinies, sans réseau."""
 
@@ -33,6 +42,14 @@ class FauxClient:
             if motif in url:
                 return contenu
         return None
+
+    def obtenir(self, url: str, **kwargs) -> FauxReponse:
+        """Pour les modules qui lisent une réponse texte brute (flux RSS)."""
+        self.urls_appelees.append(url)
+        for motif, contenu in self.reponses.items():
+            if motif in url:
+                return FauxReponse(200, contenu)
+        return FauxReponse(404, "")
 
     def telecharger(self, url: str, **kwargs) -> bytes | None:
         self.urls_appelees.append(url)
@@ -256,12 +273,16 @@ def test_executer_module_capture_les_erreurs_de_module(monkeypatch):
 # --- Nouveaux modules -------------------------------------------------------
 
 
-def test_douze_modules_couvrent_les_sites_attendus():
+def test_tous_les_modules_couvrent_les_sites_attendus():
     modules = charger_modules()
     assert {
         "github", "gitlab", "codeberg", "gitee",          # forges de code
         "reddit", "mastodon", "bluesky", "hackernews",    # réseaux et communautés
         "devto", "keybase", "mixcloud", "steam",
+        "pixelfed", "peertube", "lemmy",                  # fédivers au-delà de Mastodon
+        "lobsters", "wikipedia", "liberapay",             # sans clé
+        "goodreads", "letterboxd",                        # via flux RSS
+        "lastfm", "twitch",                               # nécessitent une clé (indisponibles en test)
     } == set(modules)
 
 
@@ -393,6 +414,370 @@ def test_chaque_module_a_une_limite_de_debit_declaree():
         "api.github.com", "gitlab.com", "codeberg.org", "gitee.com",
         "www.reddit.com", "hacker-news.firebaseio.com", "keybase.io",
         "api.mixcloud.com", "public.api.bsky.app", "dev.to", "steamcommunity.com",
+        "lobste.rs", "ws.audioscrobbler.com", "api.twitch.tv",
+        "liberapay.com", "www.goodreads.com", "letterboxd.com",
     }
     manquants = domaines_appeles - set(par_domaine)
     assert not manquants, f"Limite de débit non déclarée pour : {sorted(manquants)}"
+
+
+# --- Vague A : nouveaux modules (juillet 2026) ------------------------------
+
+
+def test_pixelfed_reutilise_lextraction_mastodon(monkeypatch):
+    """Pixelfed expose la même API que Mastodon : ModulePixelfed doit donc
+    fonctionner sans code d'extraction propre."""
+    from app.modules.pixelfed import ModulePixelfed
+
+    faux = FauxClient(
+        {
+            "accounts/lookup": {
+                "username": "jeanmartin",
+                "display_name": "Jean Martin",
+                "note": "Photographe. Contact : jean@exemple.fr",
+                "created_at": "2022-01-01T00:00:00Z",
+                "avatar": "https://pixelfed.social/avatar.png",
+            }
+        }
+    )
+    module = ModulePixelfed()
+    # enrichir() est hérité de ModuleMastodon : ClientHttp y est résolu dans le
+    # module où la fonction est définie, donc app.modules.mastodon.
+    monkeypatch.setattr("app.modules.mastodon.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://pixelfed.social/jeanmartin", "jeanmartin")
+
+    assert resultat.erreur is None
+    assert "jean@exemple.fr" in resultat.valeurs(TypeDonnee.EMAIL)
+
+
+def test_peertube_extrait_identifiant_et_bio(monkeypatch):
+    from app.modules.peertube import ModulePeerTube
+
+    assert ModulePeerTube._identifiant("https://peertube.social/accounts/jeanmartin") == "jeanmartin"
+    assert ModulePeerTube._identifiant("https://peertube.social/a/jeanmartin/video-channels") == "jeanmartin"
+    assert ModulePeerTube._identifiant("https://peertube.social/videos/watch/abc") is None
+
+    faux = FauxClient(
+        {
+            "api/v1/accounts/": {
+                "name": "jeanmartin",
+                "displayName": "Jean Martin",
+                "description": "Vidéaste. Contact : jean@exemple.fr",
+                "createdAt": "2021-06-01T00:00:00Z",
+                "followersCount": 10,
+                "avatars": [{"path": "/lazy-static/avatars/x.png"}],
+            }
+        }
+    )
+    module = ModulePeerTube()
+    monkeypatch.setattr("app.modules.peertube.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://peertube.social/accounts/jeanmartin", "jeanmartin")
+
+    assert resultat.erreur is None
+    assert "jean@exemple.fr" in resultat.valeurs(TypeDonnee.EMAIL)
+    assert resultat.valeurs(TypeDonnee.AVATAR_URL) == ["https://peertube.social/lazy-static/avatars/x.png"]
+
+
+def test_lemmy_extrait_identifiant_et_bio(monkeypatch):
+    from app.modules.lemmy import ModuleLemmy
+
+    assert ModuleLemmy._identifiant("https://lemmy.world/u/jeanmartin") == "jeanmartin"
+    assert ModuleLemmy._identifiant("https://lemmy.world/c/france") is None
+
+    faux = FauxClient(
+        {
+            "api/v3/user": {
+                "person_view": {
+                    "person": {
+                        "display_name": "Jean Martin",
+                        "bio": "Contact : jean@exemple.fr, voir aussi @jm_alt",
+                        "published": "2020-05-01T00:00:00Z",
+                        "avatar": "https://lemmy.world/avatar.png",
+                    }
+                }
+            }
+        }
+    )
+    module = ModuleLemmy()
+    monkeypatch.setattr("app.modules.lemmy.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://lemmy.world/u/jeanmartin", "jeanmartin")
+
+    assert resultat.erreur is None
+    assert "jean@exemple.fr" in resultat.valeurs(TypeDonnee.EMAIL)
+    assert "jm_alt" in resultat.valeurs(TypeDonnee.PSEUDO_ALT)
+
+
+def test_lobsters_exploite_les_comptes_declares(monkeypatch):
+    from app.modules.lobsters import ModuleLobsters
+
+    faux = FauxClient(
+        {
+            "lobste.rs/u/": {
+                "username": "jeanmartin",
+                "about": "Développeur. Contact : jean@exemple.fr",
+                "created_at": "2018-01-01T00:00:00Z",
+                "github_username": "jm_github",
+                "twitter_username": "jm_x",
+                "avatar_url": "/avatars/jeanmartin-100.png",
+            }
+        }
+    )
+    module = ModuleLobsters()
+    monkeypatch.setattr("app.modules.lobsters.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://lobste.rs/u/jeanmartin", "jeanmartin")
+
+    assert resultat.erreur is None
+    pseudos = resultat.valeurs(TypeDonnee.PSEUDO_ALT)
+    assert "jm_github" in pseudos and "jm_x" in pseudos
+    # Un avatar servi en chemin relatif doit être complété avec le domaine du site
+    assert resultat.valeurs(TypeDonnee.AVATAR_URL) == ["https://lobste.rs/avatars/jeanmartin-100.png"]
+
+
+def test_nettoyage_wikitexte_retire_la_syntaxe():
+    from app.modules.wikipedia import nettoyer_wikitexte
+
+    texte = "{{Infobox}} Bonjour '''Jean''' voir [[Paris|la capitale]] et <br/> la suite."
+    assert nettoyer_wikitexte(texte) == "Bonjour Jean voir la capitale et la suite."
+
+
+def test_wikipedia_identifiant_depuis_url():
+    from app.modules.wikipedia import ModuleWikipedia
+
+    assert ModuleWikipedia._identifiant("https://fr.wikipedia.org/wiki/Utilisateur:JeanMartin") == "JeanMartin"
+    assert ModuleWikipedia._identifiant("https://en.wikipedia.org/wiki/User:JeanMartin") == "JeanMartin"
+    assert ModuleWikipedia._identifiant("https://fr.wikipedia.org/wiki/Paris") is None
+
+
+def test_wikipedia_croise_inscription_et_page_utilisateur(monkeypatch):
+    """Deux appels API distincts (liste des utilisateurs, puis contenu de la page) :
+    le faux client doit distinguer les deux d'après leurs paramètres, l'URL de base
+    étant identique."""
+    from app.modules.wikipedia import ModuleWikipedia
+
+    class FauxClientWikipedia:
+        def obtenir_json(self, url, parametres_requete=None, **kwargs):
+            parametres_requete = parametres_requete or {}
+            if parametres_requete.get("action") == "query":
+                return {"query": {"users": [{"name": "JeanMartin", "registration": "2015-03-12T10:00:00Z"}]}}
+            if parametres_requete.get("action") == "parse":
+                return {
+                    "parse": {
+                        "wikitext": {
+                            "*": "Bonjour, je suis [[Jean Martin]]. Contact : jean@exemple.fr. "
+                            "Voir aussi https://exemple.fr et @jm_alt."
+                        }
+                    }
+                }
+            return None
+
+    module = ModuleWikipedia()
+    monkeypatch.setattr("app.modules.wikipedia.ClientHttp", lambda *a, **k: FauxClientWikipedia())
+
+    resultat = module.enrichir("https://fr.wikipedia.org/wiki/Utilisateur:JeanMartin", "JeanMartin")
+
+    assert resultat.erreur is None
+    assert resultat.valeurs(TypeDonnee.DATE_CREATION) == ["2015-03-12T10:00:00Z"]
+    assert "jean@exemple.fr" in resultat.valeurs(TypeDonnee.EMAIL)
+    assert "https://exemple.fr" in resultat.valeurs(TypeDonnee.LIEN_EXTERNE)
+    assert "jm_alt" in resultat.valeurs(TypeDonnee.PSEUDO_ALT)
+
+
+def test_wikipedia_signale_un_compte_introuvable(monkeypatch):
+    from app.modules.wikipedia import ModuleWikipedia
+
+    class FauxClientWikipedia:
+        def obtenir_json(self, url, parametres_requete=None, **kwargs):
+            return {"query": {"users": [{"name": "Inconnu", "missing": ""}]}}
+
+    module = ModuleWikipedia()
+    monkeypatch.setattr("app.modules.wikipedia.ClientHttp", lambda *a, **k: FauxClientWikipedia())
+
+    resultat = module.enrichir("https://en.wikipedia.org/wiki/User:Inconnu", "Inconnu")
+    assert resultat.erreur is not None
+
+
+def test_lastfm_extrait_le_nom_reel_et_le_pays(monkeypatch):
+    from app.modules.lastfm import ModuleLastFm
+
+    class FauxParametresLastFm:
+        lastfm_api_key = "clef-test"
+
+    monkeypatch.setattr("app.modules.lastfm.parametres", lambda: FauxParametresLastFm())
+
+    faux = FauxClient(
+        {
+            "audioscrobbler.com": {
+                "user": {
+                    "realname": "Jean Martin",
+                    "country": "France",
+                    "registered": {"unixtime": "1420070400"},
+                    "image": [
+                        {"size": "small", "#text": "https://x/small.png"},
+                        {"size": "extralarge", "#text": "https://x/large.png"},
+                    ],
+                }
+            }
+        }
+    )
+    module = ModuleLastFm()
+    monkeypatch.setattr("app.modules.lastfm.ClientHttp", lambda *a, **k: faux)
+
+    assert module.disponible() is True
+    resultat = module.enrichir("https://www.last.fm/user/jeanmartin", "jeanmartin")
+
+    assert resultat.erreur is None
+    assert resultat.valeurs(TypeDonnee.NOM_REEL) == ["Jean Martin"]
+    assert resultat.valeurs(TypeDonnee.LOCALISATION) == ["France"]
+    assert resultat.valeurs(TypeDonnee.AVATAR_URL) == ["https://x/large.png"]
+
+
+def test_lastfm_indisponible_sans_cle(monkeypatch):
+    from app.modules.lastfm import ModuleLastFm
+
+    class FauxParametresLastFm:
+        lastfm_api_key = ""
+
+    monkeypatch.setattr("app.modules.lastfm.parametres", lambda: FauxParametresLastFm())
+    assert ModuleLastFm().disponible() is False
+
+
+def test_twitch_extrait_le_profil(monkeypatch):
+    from app.modules import twitch as module_twitch
+
+    class FauxParametresTwitch:
+        twitch_client_id = "id-test"
+        twitch_client_secret = "secret-test"
+
+    monkeypatch.setattr(module_twitch, "_jeton_application", lambda: "jeton-test")
+    monkeypatch.setattr(module_twitch, "parametres", lambda: FauxParametresTwitch())
+
+    faux = FauxClient(
+        {
+            "helix/users": {
+                "data": [
+                    {
+                        "display_name": "JeanMartin",
+                        "description": "Streaming. Contact : jean@exemple.fr",
+                        "created_at": "2019-01-01T00:00:00Z",
+                        "profile_image_url": "https://x/avatar.png",
+                    }
+                ]
+            }
+        }
+    )
+    monkeypatch.setattr(module_twitch, "ClientHttp", lambda *a, **k: faux)
+
+    resultat = module_twitch.ModuleTwitch().enrichir("https://twitch.tv/jeanmartin", "jeanmartin")
+
+    assert resultat.erreur is None
+    assert "jean@exemple.fr" in resultat.valeurs(TypeDonnee.EMAIL)
+
+
+def test_twitch_indisponible_sans_cle(monkeypatch):
+    from app.modules import twitch as module_twitch
+
+    class FauxParametresTwitch:
+        twitch_client_id = ""
+        twitch_client_secret = ""
+
+    monkeypatch.setattr(module_twitch, "parametres", lambda: FauxParametresTwitch())
+    assert module_twitch.ModuleTwitch().disponible() is False
+
+
+def test_liberapay_confirme_le_compte_et_lavatar(monkeypatch):
+    from app.modules.liberapay import ModuleLiberapay
+
+    faux = FauxClient(
+        {
+            "liberapay.com/jeanmartin/public.json": {
+                "username": "jeanmartin",
+                "avatar_url": "https://seccdn.libravatar.org/avatar/x",
+                "npatrons": 12,
+            }
+        }
+    )
+    module = ModuleLiberapay()
+    monkeypatch.setattr("app.modules.liberapay.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://liberapay.com/jeanmartin/", "jeanmartin")
+
+    assert resultat.erreur is None
+    assert resultat.valeurs(TypeDonnee.NB_ABONNES) == ["12"]
+
+
+def test_goodreads_identifiant_numerique_depuis_url():
+    from app.modules.goodreads import ModuleGoodreads
+
+    assert (
+        ModuleGoodreads._identifiant_numerique("https://www.goodreads.com/user/show/12345678-jean-martin")
+        == "12345678"
+    )
+    assert ModuleGoodreads._identifiant_numerique("https://www.goodreads.com/user/show/jeanmartin") is None
+
+
+def test_goodreads_scanne_le_flux_rss(monkeypatch):
+    from app.modules.goodreads import ModuleGoodreads
+
+    flux = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<rss version=\"2.0\"><channel>"
+        "<title>Etagere de lecture de Jean Martin</title>"
+        "<description>Contact : jean@exemple.fr</description>"
+        "<item><title>Un livre par @jm_alt</title></item>"
+        "</channel></rss>"
+    )
+    faux = FauxClient({"list_rss/12345678": flux})
+    module = ModuleGoodreads()
+    monkeypatch.setattr("app.modules.goodreads.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://www.goodreads.com/user/show/12345678-jean-martin", "jean-martin")
+
+    assert resultat.erreur is None
+    assert "jean@exemple.fr" in resultat.valeurs(TypeDonnee.EMAIL)
+    assert "jm_alt" in resultat.valeurs(TypeDonnee.PSEUDO_ALT)
+
+
+def test_goodreads_signale_etagere_introuvable(monkeypatch):
+    from app.modules.goodreads import ModuleGoodreads
+
+    module = ModuleGoodreads()
+    monkeypatch.setattr("app.modules.goodreads.ClientHttp", lambda *a, **k: FauxClient({}))
+
+    resultat = module.enrichir("https://www.goodreads.com/user/show/999999-x", "x")
+    assert resultat.erreur is not None
+
+
+def test_letterboxd_scanne_le_journal_rss(monkeypatch):
+    from app.modules.letterboxd import ModuleLetterboxd
+
+    flux = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<rss version=\"2.0\"><channel>"
+        "<title>Journal Letterboxd de Jean Martin</title>"
+        "<description>Cinephile. jean@exemple.fr</description>"
+        "<item><description>&lt;p&gt;Superbe film, merci @jm_alt !&lt;/p&gt;</description></item>"
+        "</channel></rss>"
+    )
+    faux = FauxClient({"letterboxd.com/jeanmartin/rss": flux})
+    module = ModuleLetterboxd()
+    monkeypatch.setattr("app.modules.letterboxd.ClientHttp", lambda *a, **k: faux)
+
+    resultat = module.enrichir("https://letterboxd.com/jeanmartin/", "jeanmartin")
+
+    assert resultat.erreur is None
+    assert "jean@exemple.fr" in resultat.valeurs(TypeDonnee.EMAIL)
+    assert "jm_alt" in resultat.valeurs(TypeDonnee.PSEUDO_ALT)
+
+
+def test_letterboxd_signale_journal_introuvable(monkeypatch):
+    from app.modules.letterboxd import ModuleLetterboxd
+
+    module = ModuleLetterboxd()
+    monkeypatch.setattr("app.modules.letterboxd.ClientHttp", lambda *a, **k: FauxClient({}))
+
+    resultat = module.enrichir("https://letterboxd.com/inconnu/", "inconnu")
+    assert resultat.erreur is not None

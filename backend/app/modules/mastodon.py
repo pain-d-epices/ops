@@ -4,6 +4,10 @@ Mastodon étant fédéré, le domaine varie d'une instance à l'autre : le modul
 interroge l'instance présente dans l'URL du profil, via l'API publique standard.
 Les champs personnalisés (« fields ») sont particulièrement riches en pivots — les
 utilisateurs y déclarent souvent leur site, leur GitHub ou leur email.
+
+`ModulePixelfed` hérite directement de cette classe : Pixelfed expose volontairement
+la même API que Mastodon, pour que les applications clientes existantes fonctionnent
+sans adaptation. Seuls `nom`, `libelle` et `domaines` diffèrent.
 """
 
 from __future__ import annotations
@@ -60,7 +64,7 @@ class ModuleMastodon(ModuleSite):
         identifiant = (self.pseudo_depuis_url(url_profil) or pseudo).lstrip("@")
 
         if not instance:
-            resultat.erreur = "Instance Mastodon indéterminable depuis l'URL."
+            resultat.erreur = f"Instance {self.libelle} indéterminable depuis l'URL."
             return resultat
 
         client = ClientHttp()
@@ -74,7 +78,7 @@ class ModuleMastodon(ModuleSite):
             return resultat
 
         if not isinstance(donnees, dict) or not donnees.get("username"):
-            resultat.erreur = f"Compte Mastodon introuvable pour « {identifiant}@{instance} »."
+            resultat.erreur = f"Compte {self.libelle} introuvable pour « {identifiant}@{instance} »."
             return resultat
 
         resultat.donnees_brutes = donnees

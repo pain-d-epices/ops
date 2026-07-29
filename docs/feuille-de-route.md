@@ -63,22 +63,24 @@ site couvert. La couverture est le vrai facteur limitant, pas le moteur.
 
 Chaque module suit le patron existant : environ une heure de travail et un test.
 
-| Site | Intérêt |
-|---|---|
-| Lobsters, Codeberg *(fait)*, SourceHut | communautés techniques, profils riches |
-| Last.fm | API publique avec clé gratuite, historique d'écoute et localisation |
-| Wikipédia / Wikimedia | contributions publiques, très révélatrices d'intérêts et de fuseau horaire |
-| Telegram (canaux publics) | via l'API Bot, sur canaux publics uniquement |
-| Twitch | API officielle, clé gratuite |
-| Pixelfed, PeerTube, Lemmy | fédivers : mêmes API que Mastodon, quasi gratuit à ajouter |
-| Ko-fi, Liberapay | financement participatif, souvent liés à une identité réelle |
-| Goodreads, Letterboxd | via flux RSS publics quand l'API manque |
+| Site | Intérêt | État |
+|---|---|---|
+| Lobsters, Codeberg | communautés techniques, profils riches | ✅ fait |
+| SourceHut | idem | écarté — pas d'API de lecture anonyme (GraphQL sous OAuth uniquement) |
+| Last.fm | API publique avec clé gratuite, historique d'écoute et localisation | ✅ fait |
+| Wikipédia / Wikimedia | contributions publiques, très révélatrices d'intérêts et de fuseau horaire | ✅ fait |
+| Telegram (canaux publics) | via l'API Bot, sur canaux publics uniquement | écarté — l'API Bot ne consulte que des canaux, pas un compte individuel |
+| Twitch | API officielle, clé gratuite | ✅ fait |
+| Pixelfed, PeerTube, Lemmy | fédivers : mêmes API que Mastodon, quasi gratuit à ajouter | ✅ fait |
+| Ko-fi | financement participatif, souvent lié à une identité réelle | écarté — aucun point d'accès public en lecture |
+| Liberapay | idem | ✅ fait (apport modeste : pas de biographie exposée par l'API) |
+| Goodreads, Letterboxd | via flux RSS publics quand l'API manque | ✅ fait |
 
 ### Vague B — Clé API gratuite (effort faible, configuration client)
 
-Steam *(fait via XML)*, Twitch, Last.fm, Discord (jeton de bot), YouTube (quota
-gratuit). Chacune demande une clé à configurer dans `.env` : à documenter clairement,
-puisque vous n'êtes pas développeur.
+Steam *(fait via XML)*, Twitch *(fait)*, Last.fm *(fait)*, Discord (jeton de bot),
+YouTube (quota gratuit). Chacune demande une clé à configurer dans `.env` : à
+documenter clairement, puisque vous n'êtes pas développeur.
 
 ### Vague C — X / Twitter via l'API officielle (effort moyen, coût réel)
 
@@ -258,8 +260,12 @@ continue de se justifier, plutôt que sur l'accès aux types de recherche eux-m�
 
 ## Ordre de mise en œuvre recommandé
 
-1. **Vague A des modules** — gain immédiat, aucun risque, chaque module est autonome
-   *(partiellement fait : Codeberg, Gitee, Bluesky, Dev.to, MixCloud, Steam)*
+1. ✅ **Vague A des modules** — dix modules ajoutés le 29/07/2026 : Lobsters,
+   Wikipédia, Liberapay, Goodreads, Letterboxd (sans clé), Last.fm et Twitch (clé
+   gratuite), Pixelfed, PeerTube, Lemmy (fédivers). S'ajoutent aux six déjà faits
+   (Codeberg, Gitee, Bluesky, Dev.to, MixCloud, Steam). SourceHut, Telegram et Ko-fi
+   ont été écartés faute d'API publique exploitable pour ce cas d'usage — détail
+   dans [docs/ajouter-un-module.md](ajouter-un-module.md).
 2. ✅ **`user-scanner` (MIT)** — présence e-mail/pseudo sur ~360 sites, intégré comme
    sous-processus (même patron que Maigret)
 3. ✅ **Abstraction `Chercheur`** — prérequis technique de tout le reste
@@ -268,11 +274,8 @@ continue de se justifier, plutôt que sur l'accès aux types de recherche eux-m�
    décider (service payant, ~4 $/mois)
 6. ✅ **Chercheur téléphone** (libphonenumber + `user-scanner`)
 7. ✅ **Chercheur adresse** (Nominatim + adresse.data.gouv.fr)
-8. **Discord et X** — connecteurs officiels, selon la demande client réelle
-
-Reste donc : la suite de la vague A (Lobsters, SourceHut, Last.fm, Wikipédia, Twitch,
-Pixelfed/PeerTube/Lemmy, Ko-fi/Liberapay, Goodreads, Letterboxd), puis les connecteurs
-officiels Discord et X.
+8. **Discord et X** — connecteurs officiels, seule étape non encore commencée de
+   cette feuille de route, selon la demande client réelle
 
 ---
 

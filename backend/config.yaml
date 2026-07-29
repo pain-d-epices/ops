@@ -165,6 +165,25 @@ rate_limiting:
     "steamcommunity.com":
       requetes_par_minute: 20
       rafale: 5
+    "lobste.rs":
+      requetes_par_minute: 20
+      rafale: 5
+    "ws.audioscrobbler.com":
+      requetes_par_minute: 40      # API Last.fm, généreuse avec une clé
+      rafale: 15
+    "api.twitch.tv":
+      requetes_par_minute: 40
+      rafale: 15
+    "liberapay.com":
+      requetes_par_minute: 20
+      rafale: 5
+    "www.goodreads.com":
+      # Flux RSS non officiel (l'API a fermé en 2020) : on reste prudent
+      requetes_par_minute: 10
+      rafale: 3
+    "letterboxd.com":
+      requetes_par_minute: 15
+      rafale: 5
     "fr.gravatar.com":
       requetes_par_minute: 30
       rafale: 10

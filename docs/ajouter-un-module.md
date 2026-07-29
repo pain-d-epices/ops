@@ -193,11 +193,25 @@ sites vous exposerait à trois problèmes cumulés :
 2. rupture de service à chaque changement de leur côté (fréquent, et sans préavis) ;
 3. exposition juridique pour vous en tant qu'éditeur du service.
 
-C'est une décision commerciale, pas technique. Les sites couverts aujourd'hui (GitHub,
-Reddit, Mastodon, GitLab, Hacker News, Keybase) ont tous été retenus sur ce critère.
+C'est une décision commerciale, pas technique. Les vingt-deux modules couverts
+aujourd'hui (GitHub, GitLab, Codeberg, Gitee, Reddit, Mastodon, Pixelfed, PeerTube,
+Lemmy, Bluesky, Hacker News, Dev.to, Keybase, MixCloud, Steam, Lobsters, Wikipédia,
+Liberapay, Goodreads, Letterboxd, Last.fm, Twitch) ont tous été retenus sur ce critère.
 
 ## Idées de modules sûrs à ajouter
 
-Bitbucket, Codeberg, Lobsters, Dev.to, StackExchange, Telegram (canaux publics),
-Steam (API publique), Twitch (API officielle avec clé), Bluesky (API AT Protocol
-ouverte), Last.fm, Goodreads, Wikipédia (contributions publiques).
+Bitbucket, StackExchange.
+
+## Écarté faute d'API publique fiable (juillet 2026)
+
+Trois pistes de la feuille de route ont été examinées et volontairement laissées de
+côté, faute d'un point d'accès public et stable :
+
+- **SourceHut** — pas d'API de lecture anonyme ; seule une API GraphQL protégée par
+  OAuth existe, ce qui reviendrait à exiger une clé pour un site classé « sans clé ».
+- **Telegram (canaux publics)** — l'API Bot ne permet de consulter que les canaux
+  dont le bot est membre ou les canaux publics par `@nom`, jamais un compte
+  utilisateur individuel pris au hasard : peu utile pour enrichir un profil trouvé
+  par pivot.
+- **Ko-fi** — aucun point d'accès public en lecture ; l'API existante ne sert qu'aux
+  webhooks de paiement.

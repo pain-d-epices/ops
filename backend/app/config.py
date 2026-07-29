@@ -59,6 +59,9 @@ class Parametres(BaseSettings):
     github_token: str = ""
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
+    lastfm_api_key: str = ""
+    twitch_client_id: str = ""
+    twitch_client_secret: str = ""
 
     # --- Chemins ---
     dossier_donnees: str = "./donnees"
