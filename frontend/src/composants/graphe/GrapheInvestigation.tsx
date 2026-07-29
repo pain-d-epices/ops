@@ -82,9 +82,11 @@ function couleurScore(score: number): string {
 }
 
 function tailleNoeud(type: TypeNoeud, score: number): number {
-  if (type === "pseudo") return 52;
-  if (type === "compte") return 24 + (score / 100) * 22; // 24 à 46 px selon le score
-  return 22;
+  if (type === "pseudo") return 60;
+  if (type === "compte") return 30 + (score / 100) * 24; // 30 à 54 px selon le score
+  // Les nœuds d'information portent un pictogramme : en dessous de cette taille,
+  // le dessin devient une tache indistincte.
+  return 34;
 }
 
 /**
@@ -200,8 +202,10 @@ export function GrapheInvestigation({
               ? {
                   "background-image": ICONES_TYPE[type as TypeNoeud] as string,
                   "background-fit": "none" as const,
-                  "background-width": "55%",
-                  "background-height": "55%",
+                  // Le pictogramme occupe la majeure partie du nœud : plus petit,
+                  // il n'est plus identifiable une fois le graphe dézoomé.
+                  "background-width": "68%",
+                  "background-height": "68%",
                   "background-position-x": "50%",
                   "background-position-y": "50%",
                 }

@@ -1,0 +1,215 @@
+# Feuille de route
+
+Plan établi le 29/07/2026, à valider avant mise en œuvre. Rien de ce document n'est
+encore développé.
+
+Trois axes, dans l'ordre où je les recommande :
+
+1. **Élargir la couverture des modules** — le facteur limitant mesuré aujourd'hui
+2. **Points de départ multiples** (fonctionnalité payante demandée)
+3. **Nouveaux types de recherche** : e-mail, téléphone, adresse
+
+---
+
+## Préalable : la vérité sur Osintgram et les plateformes fermées
+
+Ce point conditionne tout le reste, donc il vient en premier.
+
+### Osintgram n'est pas intégrable
+
+| Obstacle | Détail |
+|---|---|
+| **Licence GPL-3.0** | Intégrer ce code dans Searcher contaminerait juridiquement le produit. En SaaS pur (le code n'est jamais distribué), la GPL-3.0 ne force pas la publication — c'est l'AGPL qui couvre ce cas. Mais la position est fragile, et interdit toute installation chez un client. |
+| **Compte Instagram réel obligatoire** | L'outil se connecte avec de vrais identifiants. Chaque client devrait fournir les siens, ou vous exposeriez les vôtres. |
+| **Violation des conditions d'Instagram** | Le scraping authentifié est explicitement interdit. Bannissement du compte à la clé, et exposition juridique pour vous en tant qu'éditeur. |
+| **Fiabilité** | L'outil casse à chaque changement de Meta, ce qui arrive plusieurs fois par an. |
+
+**Ce qui reste possible sur Instagram** : l'API Graph officielle, qui exige un compte
+Business et une validation par Meta, et ne donne accès qu'à des comptes professionnels
+ayant consenti. Utile pour de la veille de marque, pas pour une investigation.
+
+### Les autres grandes plateformes
+
+| Plateforme | Voie légale | Coût | Verdict |
+|---|---|---|---|
+| **X / Twitter** | API officielle v2 | ~200 $/mois (palier Basic) | **Réaliste** pour un plan Entreprise. Fiable et sans risque juridique. |
+| **Discord** | API officielle avec jeton de bot | Gratuit | **Réaliste mais limité** — voir ci-dessous |
+| **Instagram** | API Graph (comptes Business uniquement) | Gratuit | Peu utile en investigation |
+| **TikTok** | API Research | Réservée aux chercheurs universitaires | Hors de portée |
+| **LinkedIn** | Aucune API de consultation de profils | — | À écarter : le scraping y est poursuivi activement |
+| **Facebook** | Aucune | — | À écarter |
+
+### Le cas Discord, précisément
+
+Discord ne permet pas de **trouver** quelqu'un par pseudonyme : les pseudos n'y sont
+pas énumérables publiquement, c'est une décision de conception de leur part.
+
+En revanche, avec un jeton de bot (gratuit), l'API officielle donne le profil complet
+à partir d'un **identifiant numérique** : nom d'utilisateur, avatar, bannière, date de
+création du compte, badges.
+
+Conséquence concrète : un module Discord est utile **en pivot** (quand une autre source
+a livré l'identifiant), jamais en découverte initiale. C'est exactement le genre de cas
+que l'axe 3 rendra exploitable.
+
+---
+
+## Axe 1 — Élargir la couverture des modules
+
+**Constat mesuré** : sur une investigation de 109 comptes, 2 seulement relevaient d'un
+site couvert. La couverture est le vrai facteur limitant, pas le moteur.
+
+### Vague A — APIs publiques, sans clé (effort faible, aucun risque)
+
+Chaque module suit le patron existant : environ une heure de travail et un test.
+
+| Site | Intérêt |
+|---|---|
+| Lobsters, Codeberg *(fait)*, SourceHut | communautés techniques, profils riches |
+| Last.fm | API publique avec clé gratuite, historique d'écoute et localisation |
+| Wikipédia / Wikimedia | contributions publiques, très révélatrices d'intérêts et de fuseau horaire |
+| Telegram (canaux publics) | via l'API Bot, sur canaux publics uniquement |
+| Twitch | API officielle, clé gratuite |
+| Pixelfed, PeerTube, Lemmy | fédivers : mêmes API que Mastodon, quasi gratuit à ajouter |
+| Ko-fi, Liberapay | financement participatif, souvent liés à une identité réelle |
+| Goodreads, Letterboxd | via flux RSS publics quand l'API manque |
+
+### Vague B — Clé API gratuite (effort faible, configuration client)
+
+Steam *(fait via XML)*, Twitch, Last.fm, Discord (jeton de bot), YouTube (quota
+gratuit). Chacune demande une clé à configurer dans `.env` : à documenter clairement,
+puisque vous n'êtes pas développeur.
+
+### Vague C — X / Twitter via l'API officielle (effort moyen, coût réel)
+
+~200 $/mois. À réserver aux plans Pro et Entreprise, avec répercussion du coût dans
+le prix. C'est la seule voie propre vers X.
+
+### Ce que je recommande d'écarter
+
+Instagram, Facebook, LinkedIn, TikTok par scraping. Le rapport risque/bénéfice est
+mauvais : bannissements, casse permanente, exposition juridique de l'éditeur.
+
+---
+
+## Axe 2 — Points de départ multiples (fonctionnalité payante)
+
+Aujourd'hui, une investigation démarre avec **un pseudonyme, et rien d'autre**.
+
+### Ce qui change pour l'utilisateur
+
+Le formulaire accepte plusieurs points de départ, de types différents :
+
+- un pseudonyme (comme aujourd'hui)
+- **l'adresse d'un compte** (`https://github.com/quelquun`) — le site est enrichi
+  directement, et le pseudonyme qui en est extrait lance la recherche large
+- une adresse e-mail
+- un numéro de téléphone
+- un nom réel
+- un domaine
+
+Plusieurs éléments peuvent être fournis ensemble : ils se corroborent mutuellement dès
+le premier tour, au lieu d'attendre un rebond.
+
+### Ce que ça implique techniquement
+
+| Élément | Nature du travail |
+|---|---|
+| Table `points_depart` | Nouvelle table (type, valeur), plusieurs par investigation |
+| Abstraction `Chercheur` | Généralisation de ce qui est aujourd'hui codé en dur autour de Maigret : un chercheur par type d'entrée, découvert automatiquement comme les modules |
+| `MaigretRunner` devient `ChercheurPseudo` | Un cas particulier parmi d'autres, sans changement de comportement |
+| Corrélation | Les points de départ multiples deviennent autant de références pour le scoring — amélioration directe de la précision |
+| Interface | Formulaire à entrées multiples, avec détection automatique du type saisi |
+| Gating | `recherche_multi_criteres` réservé aux plans payants |
+
+**Bonne nouvelle** : l'architecture actuelle s'y prête. Le pivot produit déjà des
+entités typées (pseudo, e-mail, lien) et sait quoi en faire. Les points de départ
+multiples reviennent à **injecter ces entités au départ plutôt qu'en cours de route**.
+C'est une généralisation, pas une réécriture.
+
+**Effort estimé** : moyen. Le gros du travail est l'abstraction `Chercheur` ; le reste
+suit mécaniquement.
+
+---
+
+## Axe 3 — Recherche par e-mail, téléphone, adresse
+
+C'est ici que se trouve le plus gros gain de valeur, et le plus de pièges.
+
+### E-mail
+
+| Technique | Légalité | Fiabilité | Licence |
+|---|---|---|---|
+| **Gravatar** — le hash MD5 de l'adresse donne accès à un profil public (nom, sites déclarés) | Totale | Bonne quand il existe | API publique |
+| **Partie locale comme pseudonyme** — `jean.martin@…` → recherche sur `jean.martin` | Totale | Bonne | *(déjà implémenté)* |
+| **Have I Been Pwned** — dans quelles fuites l'adresse apparaît | Totale, service payant officiel | Excellente | ~4 $/mois |
+| **Vérification MX/SMTP** — l'adresse existe-t-elle ? | Légale | Moyenne (beaucoup de serveurs répondent toujours oui) | — |
+| **Technique « holehe »** — tester l'existence d'un compte via les formulaires de récupération de mot de passe, sur ~120 sites | Zone grise | Bonne | Code source en GPL-3.0 : à **réimplémenter**, pas à copier |
+
+Sur le dernier point, soyons clairs : la technique consiste à interroger les
+formulaires de mot de passe oublié pour voir si le site reconnaît l'adresse. C'est
+efficace, c'est utilisé par tous les outils du domaine, et c'est à la limite de
+l'usage prévu de ces formulaires. À trancher explicitement, et à documenter dans les
+conditions d'utilisation si vous le retenez.
+
+### Téléphone
+
+| Technique | Apport |
+|---|---|
+| **libphonenumber** (Google, licence Apache 2.0, compatible commercial) | Validité, pays, opérateur, type de ligne (mobile/fixe/VoIP). Immédiat et sans risque. |
+| Recherche du numéro comme chaîne sur les sites couverts | Certaines personnes publient leur numéro |
+| Technique « ignorant » (comptes liés chez Instagram, Amazon, Snapchat) | Même situation que holehe : GPL, à réimplémenter, zone grise |
+
+### Adresse postale
+
+| Technique | Apport |
+|---|---|
+| **Nominatim** (OpenStreetMap) ou **adresse.data.gouv.fr** | Normalisation, coordonnées, validation. Gratuit et libre. |
+| Rapprochement avec les localisations déclarées sur les profils | Devient une **règle de corrélation** supplémentaire, ce qui améliore le scoring existant |
+
+### Conséquence sur le moteur
+
+Chacun de ces éléments devient une entité du graphe, avec ses propres pictogrammes, et
+alimente le pivot au même titre qu'un pseudonyme. Le mécanisme existe déjà — il n'y a
+qu'à brancher les nouveaux chercheurs dessus.
+
+---
+
+## Répartition proposée par palier
+
+| Fonctionnalité | Gratuit | Starter | Pro | Entreprise |
+|---|---|---|---|---|
+| Recherche par pseudonyme | ✅ | ✅ | ✅ | ✅ |
+| **Démarrer depuis un compte** | ❌ | ✅ | ✅ | ✅ |
+| **Points de départ multiples** | ❌ | 2 maximum | 5 | illimité |
+| **Recherche par e-mail** | ❌ | ✅ | ✅ | ✅ |
+| **Recherche par téléphone** | ❌ | ❌ | ✅ | ✅ |
+| **Recherche par adresse** | ❌ | ❌ | ✅ | ✅ |
+| Fuites de données (HIBP) | ❌ | ❌ | ✅ | ✅ |
+| Connecteur X / Twitter | ❌ | ❌ | ❌ | ✅ |
+
+À ajuster ensemble : ces répartitions sont des propositions, pas des décisions.
+
+---
+
+## Ordre de mise en œuvre recommandé
+
+1. **Vague A des modules** — gain immédiat, aucun risque, chaque module est autonome
+2. **Abstraction `Chercheur`** — prérequis technique de tout le reste
+3. **Points de départ multiples** — la fonctionnalité payante que vous demandez
+4. **Chercheur e-mail** (Gravatar + partie locale + HIBP)
+5. **Chercheur téléphone** (libphonenumber)
+6. **Chercheur adresse** (Nominatim)
+7. **Discord et X** — connecteurs officiels, selon la demande client réelle
+
+Les étapes 1 et 2 sont indépendantes et peuvent être menées en parallèle.
+
+---
+
+## Décisions qui vous reviennent
+
+1. **Technique « holehe »** (test d'existence via les formulaires de récupération) :
+   on l'implémente ou non ? C'est un gain de valeur important, dans une zone grise.
+2. **Abonnement X / Twitter à ~200 $/mois** : on l'intègre pour le palier Entreprise ?
+3. **Have I Been Pwned à ~4 $/mois** : à intégrer ? Le rapport valeur/prix est excellent.
+4. **Répartition par palier** proposée ci-dessus : à valider ou corriger.
