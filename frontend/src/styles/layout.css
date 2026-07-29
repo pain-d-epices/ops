@@ -66,17 +66,6 @@
 
 .contenu-large { max-width: none; }
 
-/* --- Bandeau d'avertissement légal ---------------------------------------- */
-
-.bandeau-legal {
-  padding: 9px 22px;
-  background: rgba(210, 153, 34, 0.09);
-  border-bottom: 1px solid rgba(210, 153, 34, 0.25);
-  color: #e3c168;
-  font-size: 12.5px;
-  text-align: center;
-}
-
 /* --- Pages d'authentification ---------------------------------------------- */
 
 .page-auth {

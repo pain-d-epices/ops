@@ -69,13 +69,6 @@ export function MiseEnPage({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      {/* Rappel permanent du cadre d'usage : l'outil traite des données
-          personnelles de tiers, et chaque recherche est tracée. */}
-      <div className="bandeau-legal">
-        Usage réservé aux investigations autorisées et légales. Chaque recherche est
-        journalisée avec son auteur et sa cible.
-      </div>
-
       <main className="contenu">{children}</main>
     </div>
   );
