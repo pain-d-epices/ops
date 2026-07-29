@@ -35,10 +35,13 @@ export function PanneauDetail({ investigationId, noeud, profilId }: Proprietes) 
   }
 
   if (!profilId) {
-    return <DetailInformation noeud={noeud} />;
+    return <DetailInformation key={noeud.id} noeud={noeud} />;
   }
 
-  return <DetailProfil investigationId={investigationId} profilId={profilId} />;
+  // La clé force un remontage à chaque changement de profil : sans elle, l'état de
+  // la mutation d'enrichissement (son message d'erreur en particulier) survivrait
+  // au changement de sélection et s'afficherait à tort sur le nœud suivant.
+  return <DetailProfil key={profilId} investigationId={investigationId} profilId={profilId} />;
 }
 
 /** Nœud d'information (e-mail, pseudonyme, lien…) : pas de score, pas de verdict. */
