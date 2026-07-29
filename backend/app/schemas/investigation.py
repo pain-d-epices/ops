@@ -10,8 +10,28 @@ from pydantic import BaseModel, Field
 from app.modeles.enums import ModePivot, VerdictManuel
 
 
+class PointDepartEntree(BaseModel):
+    """Un élément fourni au lancement. Le type peut être omis : il est alors deviné."""
+
+    valeur: str = Field(min_length=2, max_length=500)
+    type: str | None = None
+
+
+class PointDepartSortie(BaseModel):
+    id: str
+    type: str
+    valeur: str
+    statut: str
+    message_erreur: str | None
+    nb_comptes_trouves: int
+    detail: dict[str, Any] = {}
+
+
 class DemandeInvestigation(BaseModel):
     pseudo: str = Field(min_length=2, max_length=200)
+    # Éléments complémentaires : adresse électronique, téléphone, compte, adresse.
+    # Leur nombre est borné par le plan de l'organisation.
+    points_depart: list[PointDepartEntree] = Field(default_factory=list, max_length=20)
     variantes: list[str] = Field(default_factory=list, max_length=5)
     titre: str | None = Field(default=None, max_length=200)
     # Ces trois options sont des souhaits : le serveur les borne selon le plan actif.
@@ -44,6 +64,7 @@ class InvestigationDetaillee(InvestigationResumee):
     nb_noeuds: int = 0
     nb_aretes: int = 0
     nb_propositions_en_attente: int = 0
+    points_depart: list[PointDepartSortie] = []
 
 
 class SignalSortie(BaseModel):

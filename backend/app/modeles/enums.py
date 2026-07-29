@@ -78,6 +78,21 @@ class TypeDonnee(str, Enum):
     NB_ABONNES = "nb_abonnes"
 
 
+class TypePointDepart(str, Enum):
+    """Nature d'un point de départ d'investigation.
+
+    Une investigation peut démarrer avec plusieurs de ces éléments à la fois : ils se
+    corroborent alors dès le premier tour, au lieu d'attendre un rebond.
+    """
+
+    PSEUDO = "pseudo"
+    COMPTE = "compte"        # adresse d'un profil : https://github.com/quelquun
+    EMAIL = "email"
+    TELEPHONE = "telephone"
+    NOM = "nom"
+    ADRESSE = "adresse"
+
+
 class TypeNoeud(str, Enum):
     PSEUDO = "pseudo"                  # le pseudonyme recherché (racine du graphe)
     COMPTE = "compte"                  # un profil trouvé sur un site

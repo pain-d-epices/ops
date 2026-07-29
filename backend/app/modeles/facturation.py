@@ -47,6 +47,8 @@ class Plan(Base, HorodatageMixin):
     quota_utilisateurs: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     quota_investigations_actives: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     profondeur_pivot_max: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Nombre de points de départ acceptés dans une même investigation. 0 = illimité.
+    max_points_depart: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     # --- Fonctionnalités activées ---
     # Liste de codes : ["modules", "pivot", "pivot_automatique", "export_pdf", "api", "retention_etendue"]

@@ -20,6 +20,24 @@ API_PUBLIQUE = "api"
 RETENTION_ETENDUE = "retention_etendue"
 MULTI_UTILISATEURS = "multi_utilisateurs"
 
+# --- Types de recherche (disponibles dès le palier Starter) ------------------
+# Ces codes correspondent au champ `fonctionnalite_requise` des chercheurs : le
+# rapprochement est automatique, ajouter un chercheur ne demande pas de toucher ici.
+RECHERCHE_DEPUIS_COMPTE = "recherche_depuis_compte"
+RECHERCHE_EMAIL = "recherche_email"
+RECHERCHE_TELEPHONE = "recherche_telephone"
+RECHERCHE_ADRESSE = "recherche_adresse"
+RECHERCHE_MULTI_CRITERES = "recherche_multi_criteres"
+
+#: Types de recherche ouverts à tous les paliers payants
+RECHERCHES_SPECIALISEES = [
+    RECHERCHE_DEPUIS_COMPTE,
+    RECHERCHE_EMAIL,
+    RECHERCHE_TELEPHONE,
+    RECHERCHE_ADRESSE,
+    RECHERCHE_MULTI_CRITERES,
+]
+
 CODE_PLAN_GRATUIT = "free"
 
 
@@ -36,6 +54,8 @@ class DefinitionPlan:
     quota_investigations_actives: int
     profondeur_pivot_max: int
     fonctionnalites: list[str] = field(default_factory=list)
+    #: nombre de points de départ acceptés simultanément dans une même investigation
+    max_points_depart: int = 1
 
 
 # Le palier gratuit est volontairement limité : recherche Maigret + corrélation
@@ -57,12 +77,14 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         quota_investigations_actives=3,
         profondeur_pivot_max=0,
         fonctionnalites=[],
+        max_points_depart=1,
     ),
     DefinitionPlan(
         code="starter",
         nom_affiche="Starter",
         description=(
-            "Pour l'investigateur indépendant : modules d'enrichissement par site, "
+            "Pour l'investigateur indépendant : tous les modules d'enrichissement, "
+            "recherche par adresse électronique, téléphone et adresse postale, "
             "pivot supervisé sur un niveau, export CSV."
         ),
         prix_mensuel_cents=2900,
@@ -72,7 +94,13 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         quota_utilisateurs=3,
         quota_investigations_actives=25,
         profondeur_pivot_max=1,
-        fonctionnalites=[MODULES, PIVOT, EXPORT_CSV, MULTI_UTILISATEURS],
+        # Tous les types de recherche sont ouverts dès ce palier : ce qui distingue
+        # les paliers supérieurs, c'est le volume et la profondeur, pas l'accès aux
+        # fonctionnalités d'investigation elles-mêmes.
+        fonctionnalites=[
+            MODULES, PIVOT, EXPORT_CSV, MULTI_UTILISATEURS, *RECHERCHES_SPECIALISEES
+        ],
+        max_points_depart=2,
     ),
     DefinitionPlan(
         code="pro",
@@ -91,7 +119,9 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         fonctionnalites=[
             MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
             API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS,
+            *RECHERCHES_SPECIALISEES,
         ],
+        max_points_depart=5,
     ),
     DefinitionPlan(
         code="entreprise",
@@ -110,7 +140,11 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         fonctionnalites=[
             MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
             API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS,
+            *RECHERCHES_SPECIALISEES,
         ],
+        # 0 = pas de limite : les investigations complexes de ce palier peuvent
+        # partir d'autant d'éléments que nécessaire.
+        max_points_depart=0,
     ),
 ]
 

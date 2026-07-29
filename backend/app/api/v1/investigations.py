@@ -21,11 +21,13 @@ from app.modeles.enums import (
     RoleMembre,
     StatutInvestigation,
     StatutPropositionPivot,
+    TypePointDepart,
 )
 from app.modeles.graphe import AreteGraphe, NoeudGraphe
 from app.modeles.investigation import (
     DonneeExtraite,
     Investigation,
+    PointDepart,
     ProfilIdentite,
     PropositionPivot,
 )
@@ -34,6 +36,7 @@ from app.schemas.investigation import (
     DemandeInvestigation,
     InvestigationDetaillee,
     InvestigationResumee,
+    PointDepartSortie,
 )
 from app.securite.dependances import ContexteRequete, contexte_courant, exiger_cgu, exiger_role
 from app.services.journal import journaliser
@@ -74,6 +77,91 @@ def _resume(investigation: Investigation) -> InvestigationResumee:
         terminee_le=investigation.terminee_le,
         supprimer_apres=investigation.supprimer_apres,
     )
+
+
+def _enregistrer_points_depart(
+    ctx: ContexteRequete, investigation: Investigation, demande: DemandeInvestigation
+) -> None:
+    """Enregistre les points de départ, en vérifiant droits et limites du plan.
+
+    Le pseudonyme principal en est toujours un ; les éléments supplémentaires sont
+    validés un par un — un type non couvert par le plan est refusé explicitement,
+    plutôt qu'ignoré en silence.
+    """
+    from app.moteur.chercheurs.base import detecter_type
+    from app.moteur.chercheurs.registre import chercheur_pour
+    from app.moteur.correlation.base import normaliser
+    from app.services.points_depart import chercheur_autorise
+
+    session = ctx.session
+
+    # Le pseudonyme saisi est toujours le premier point de départ
+    session.add(
+        PointDepart(
+            investigation_id=investigation.id,
+            organisation_id=ctx.organisation_id,
+            type=TypePointDepart.PSEUDO.value,
+            valeur=demande.pseudo.strip()[:500],
+            valeur_normalisee=normaliser(demande.pseudo)[:500],
+        )
+    )
+
+    if not demande.points_depart:
+        session.flush()
+        return
+
+    # `max_points_depart` compte le pseudonyme principal ; 0 signifie illimité.
+    maximum = ctx.plan.max_points_depart
+    if maximum and len(demande.points_depart) + 1 > maximum:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"Le plan {ctx.plan.nom_affiche} accepte {maximum} élément(s) de départ "
+            f"par investigation, pseudonyme compris. Passez à un palier supérieur "
+            f"pour en combiner davantage.",
+        )
+
+    deja_vus: set[str] = set()
+    for entree in demande.points_depart:
+        valeur = entree.valeur.strip()
+        if not valeur:
+            continue
+
+        type_point = entree.type or detecter_type(valeur)
+        chercheur = chercheur_pour(type_point)
+        if chercheur is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"Le type « {type_point} » n'est pas encore pris en charge "
+                f"(valeur : {valeur[:60]}).",
+            )
+
+        autorise, motif = chercheur_autorise(type_point, ctx.plan)
+        if not autorise:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, motif or "Type de recherche non autorisé.")
+
+        valeur_valide = chercheur.valider(valeur)
+        if valeur_valide is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
+                f"« {valeur[:60]} » n'est pas un(e) {chercheur.libelle.lower()} valide.",
+            )
+
+        cle = f"{type_point}:{valeur_valide.lower()}"
+        if cle in deja_vus:
+            continue
+        deja_vus.add(cle)
+
+        session.add(
+            PointDepart(
+                investigation_id=investigation.id,
+                organisation_id=ctx.organisation_id,
+                type=type_point,
+                valeur=valeur_valide[:500],
+                valeur_normalisee=normaliser(valeur_valide)[:500] or valeur_valide[:500],
+            )
+        )
+
+    session.flush()
 
 
 @routeur.post("", response_model=InvestigationDetaillee, status_code=status.HTTP_201_CREATED)
@@ -139,6 +227,8 @@ def creer_investigation(
     ctx.session.add(investigation)
     ctx.session.flush()
 
+    _enregistrer_points_depart(ctx, investigation, demande)
+
     journaliser(
         ctx.session, ActionJournal.INVESTIGATION_CREEE,
         organisation_id=ctx.organisation_id, utilisateur_id=ctx.utilisateur.id,
@@ -199,6 +289,12 @@ def _detail(ctx: ContexteRequete, investigation: Investigation) -> Investigation
     )
     auteur = ctx.session.get(Utilisateur, investigation.cree_par) if investigation.cree_par else None
 
+    points = ctx.session.scalars(
+        select(PointDepart)
+        .where(PointDepart.investigation_id == investigation.id)
+        .order_by(PointDepart.created_at)
+    ).all()
+
     base = _resume(investigation)
     return InvestigationDetaillee(
         **base.model_dump(),
@@ -209,6 +305,14 @@ def _detail(ctx: ContexteRequete, investigation: Investigation) -> Investigation
         nb_noeuds=nb_noeuds or 0,
         nb_aretes=nb_aretes or 0,
         nb_propositions_en_attente=nb_propositions or 0,
+        points_depart=[
+            PointDepartSortie(
+                id=p.id, type=p.type, valeur=p.valeur, statut=p.statut,
+                message_erreur=p.message_erreur, nb_comptes_trouves=p.nb_comptes_trouves,
+                detail=p.detail or {},
+            )
+            for p in points
+        ],
     )
 
 

@@ -33,9 +33,14 @@ def _decouvrir() -> dict[str, ModuleSite]:
             continue
 
         for _, objet in inspect.getmembers(module_python, inspect.isclass):
+            # `inspect.isclass` laisse passer les alias de typage, qui font ensuite
+            # échouer `issubclass` avec une TypeError. On s'en protège explicitement.
+            try:
+                est_module = issubclass(objet, ModuleSite) and objet is not ModuleSite
+            except TypeError:
+                continue
             if (
-                issubclass(objet, ModuleSite)
-                and objet is not ModuleSite
+                est_module
                 and objet.__module__ == module_python.__name__
                 # Une classe sans `nom` est un socle mutualisé (ModuleForgeGit par
                 # exemple), pas un module utilisable : elle n'est pas enregistrée.

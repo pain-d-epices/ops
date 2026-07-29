@@ -31,7 +31,17 @@ journal = logging.getLogger(__name__)
 
 @celery_app.task(name="app.taches.recherche.lancer_investigation")
 def lancer_investigation(investigation_id: str) -> dict:
-    """Point d'entrée : lance la recherche initiale sur le pseudonyme demandé."""
+    """Point d'entrée : traite tous les points de départ de l'investigation.
+
+    Les points de départ autres que le pseudonyme (adresse électronique, téléphone,
+    compte, adresse postale) sont traités en premier : ils sont rapides et livrent
+    souvent des pseudonymes supplémentaires, qui enrichissent la recherche large qui
+    suit au lieu d'attendre un rebond.
+    """
+    from app.modeles.enums import TypePointDepart
+    from app.modeles.investigation import PointDepart
+    from app.services.points_depart import traiter_point_depart
+
     with portee_session() as session:
         investigation = session.get(Investigation, investigation_id)
         if investigation is None:
@@ -40,23 +50,77 @@ def lancer_investigation(investigation_id: str) -> dict:
 
         investigation.statut = StatutInvestigation.EN_COURS.value
         investigation.demarree_le = maintenant()
-        investigation.etape_courante = "Recherche du pseudonyme en cours"
+        investigation.etape_courante = "Analyse des éléments fournis"
         investigation.progression = 1
         pseudo = investigation.pseudo_initial
         organisation_id = investigation.organisation_id
 
+        points = (
+            session.query(PointDepart)
+            .filter(PointDepart.investigation_id == investigation_id)
+            .order_by(PointDepart.created_at)
+            .all()
+        )
+        # Le pseudonyme principal est traité à part, par la recherche large ci-dessous
+        points_specialises = [
+            p.id for p in points if p.type != TypePointDepart.PSEUDO.value
+        ]
+
     bus().emettre(
         TypeEvenement.ETAPE, investigation_id, organisation_id,
-        etape="Recherche du pseudonyme en cours", progression=1,
+        etape="Analyse des éléments fournis", progression=1,
     )
 
-    return executer_recherche(
+    # --- Points de départ spécialisés ---
+    pseudos_decouverts: list[str] = []
+    for point_id in points_specialises:
+        with portee_session() as session:
+            investigation = session.get(Investigation, investigation_id)
+            point = session.get(PointDepart, point_id)
+            if investigation is None or point is None:
+                continue
+
+            plan = plan_actif(session, organisation_id)
+            options = dict(investigation.options or {})
+            options["extraction_activee"] = plan.possede(MODULES)
+
+            bilan = traiter_point_depart(session, investigation, point, plan, options)
+            if bilan.erreur:
+                journal.info("Point de départ %s : %s", point.type, bilan.erreur)
+
+            # Un pseudonyme découvert (partie locale d'une adresse, pseudo extrait
+            # d'une URL de compte) alimente la recherche large qui suit.
+            from app.modeles.enums import TypeDonnee
+            from app.modeles.investigation import DonneeExtraite
+
+            for donnee in (
+                session.query(DonneeExtraite)
+                .filter(
+                    DonneeExtraite.investigation_id == investigation_id,
+                    DonneeExtraite.type == TypeDonnee.PSEUDO_ALT.value,
+                )
+                .all()
+            ):
+                if donnee.valeur not in pseudos_decouverts:
+                    pseudos_decouverts.append(donnee.valeur)
+
+        bus().emettre(
+            TypeEvenement.ETAPE, investigation_id, organisation_id,
+            etape=f"Élément analysé : {bilan.comptes_trouves} compte(s) trouvé(s)",
+            progression=5,
+        )
+
+    # --- Recherche large sur le pseudonyme principal ---
+    resultat = executer_recherche(
         investigation_id=investigation_id,
         pseudo=pseudo,
         profondeur=0,
         profil_origine_id=None,
         proposition_id=None,
     )
+    resultat["points_depart_traites"] = len(points_specialises)
+    resultat["pseudos_decouverts"] = pseudos_decouverts[:10]
+    return resultat
 
 
 @celery_app.task(name="app.taches.recherche.executer_recherche")

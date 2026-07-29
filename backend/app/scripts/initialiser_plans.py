@@ -46,6 +46,7 @@ def initialiser_plans() -> None:
             plan.quota_utilisateurs = definition.quota_utilisateurs
             plan.quota_investigations_actives = definition.quota_investigations_actives
             plan.profondeur_pivot_max = definition.profondeur_pivot_max
+            plan.max_points_depart = definition.max_points_depart
             plan.fonctionnalites = list(definition.fonctionnalites)
             plan.actif = True
             # L'identifiant produit Gumroad vient du .env : il diffère entre

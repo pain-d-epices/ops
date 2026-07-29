@@ -72,6 +72,9 @@ class Investigation(Base, HorodatageMixin):
     nb_profils_confirmes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     nb_recherches_effectuees: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    points_depart: Mapped[list[PointDepart]] = relationship(
+        back_populates="investigation", cascade="all, delete-orphan"
+    )
     executions: Mapped[list[ExecutionRecherche]] = relationship(
         back_populates="investigation", cascade="all, delete-orphan"
     )
@@ -84,6 +87,40 @@ class Investigation(Base, HorodatageMixin):
 
     def __repr__(self) -> str:
         return f"<Investigation {self.pseudo_initial} ({self.statut})>"
+
+
+class PointDepart(Base, HorodatageMixin):
+    """Un élément fourni par l'analyste au lancement de l'investigation.
+
+    Le pseudonyme initial reste stocké sur l'investigation pour compatibilité, mais
+    une investigation peut désormais démarrer avec plusieurs éléments de natures
+    différentes : un pseudonyme, l'adresse d'un compte, une adresse électronique, un
+    numéro… Fournis ensemble, ils se corroborent dès le premier tour au lieu
+    d'attendre un rebond.
+    """
+
+    __tablename__ = "points_depart"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
+    investigation_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    organisation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+
+    type: Mapped[str] = mapped_column(String(20), nullable=False)   # voir TypePointDepart
+    valeur: Mapped[str] = mapped_column(String(500), nullable=False)
+    valeur_normalisee: Mapped[str] = mapped_column(String(500), nullable=False)
+
+    statut: Mapped[str] = mapped_column(String(20), default="en_attente", nullable=False)
+    message_erreur: Mapped[str | None] = mapped_column(String(500))
+    nb_comptes_trouves: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    traite_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    detail: Mapped[dict[str, Any]] = mapped_column(TypeJson, default=dict, nullable=False)
+
+    investigation: Mapped[Investigation] = relationship(back_populates="points_depart")
+
+    def __repr__(self) -> str:
+        return f"<PointDepart {self.type}={self.valeur[:30]}>"
 
 
 class ExecutionRecherche(Base, HorodatageMixin):

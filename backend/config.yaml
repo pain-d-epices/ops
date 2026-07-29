@@ -92,6 +92,35 @@ maigret:
   # Nombre de requêtes simultanées de Maigret (baisser si l'IP se fait limiter)
   concurrence: 10
 
+# --- user-scanner (recherche par adresse électronique et pseudonyme) --------
+# Outil externe sous licence MIT. Complète Maigret : il sait partir d'une adresse
+# électronique, ce que Maigret ne permet pas.
+user_scanner:
+  actif: true
+  timeout_par_site: 10
+  concurrence: 20
+  # Délai entre requêtes, en secondes. 0 = pas de délai imposé.
+  delai_entre_requetes: 0
+  timeout_global: 600
+  # Les sites pour adultes sont écartés par défaut : signaler une inscription sur
+  # l'un d'eux est une information lourde de conséquences, et un faux positif y
+  # serait diffamatoire. À n'activer que pour une enquête qui le justifie.
+  inclure_sites_adultes: false
+  # NOTE : les modules dits « loud » de user-scanner déclenchent l'envoi d'un
+  # courriel ou d'un SMS à la personne recherchée. Ils ne sont jamais activés —
+  # l'option correspondante n'est pas exposée ici, et le code ne la passe jamais.
+
+# --- Recherche par téléphone -------------------------------------------------
+telephone:
+  # Pays supposé pour les numéros saisis sans indicatif international
+  pays_defaut: "FR"
+
+# --- Recherche par adresse postale -------------------------------------------
+adresse:
+  # Interroger d'abord la Base Adresse Nationale (France, plus précise et sans
+  # limite contraignante), puis Nominatim en repli pour le reste du monde.
+  utiliser_ban: true
+
 # --- Limitation de débit (rate limiting) ------------------------------------
 # File d'attente GLOBALE par domaine cible, partagée entre TOUTES les organisations.
 # C'est ce qui empêche un bannissement collectif de l'IP du service.
@@ -136,6 +165,17 @@ rate_limiting:
     "steamcommunity.com":
       requetes_par_minute: 20
       rafale: 5
+    "fr.gravatar.com":
+      requetes_par_minute: 30
+      rafale: 10
+    "api-adresse.data.gouv.fr":
+      requetes_par_minute: 50      # service public, généreux
+      rafale: 20
+    "nominatim.openstreetmap.org":
+      # La politique d'usage de Nominatim impose au maximum une requête par seconde
+      # et un User-Agent identifiable. La dépasser fait bannir l'adresse IP.
+      requetes_par_minute: 60
+      rafale: 1
 
 # --- Réseau -----------------------------------------------------------------
 reseau:
