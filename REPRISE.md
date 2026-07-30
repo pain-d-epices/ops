@@ -21,22 +21,71 @@ l'investigation se termine avec les seuls résultats des chercheurs
 spécialisés.
 
 Backend, API, schéma, tâche Celery et interface (formulaire d'accueil) mis à
-jour ; 6 nouveaux tests (130 tests backend au vert au total). Non vérifié
-visuellement dans le navigateur cette session — à confirmer à la prochaine
-ouverture de l'interface.
+jour ; 6 nouveaux tests. **Vérifié dans le navigateur le 30/07/2026** : le
+formulaire affiche bien le sélecteur de type, la détection automatique
+fonctionne (un lien collé passe en « Adresse d'un compte connu ») et le texte
+d'aide s'adapte au type choisi.
+
+### Départ depuis le lien d'un compte : extraction du pseudonyme corrigée (30/07/2026)
+
+Partir du lien d'un compte fonctionnait déjà en théorie, mais échouait
+silencieusement sur la plupart des liens réels, parce que le pseudonyme était
+cherché dans le **dernier** segment de l'URL, et que tout nom contenant un
+point était refusé. Concrètement :
+
+| Lien collé | Avant | Après |
+|---|---|---|
+| `instagram.com/jean.martin/` | *rien* (point refusé) | `jean.martin` |
+| `instagram.com/jeanmartin/reels/` | `reels` | `jeanmartin` |
+| `x.com/jeanmartin/status/1234` | `1234` | `jeanmartin` |
+| `tiktok.com/@jean.martin` | *rien* | `jean.martin` |
+| `instagram.com/p/ABC123/` | `ABC123` | *rien* (c'est une publication) |
+
+Le pseudonyme est désormais cherché au **début** du chemin, là où il se trouve
+réellement ; les points sont acceptés (courants sur Instagram, TikTok,
+Facebook) ; les préfixes de profil sont suivis (`linkedin.com/in/…`,
+`reddit.com/user/…`) ; et les adresses qui ne désignent pas un profil
+(publication, sous-forum, nom de fichier, identifiant numérique) sont écartées
+au lieu de gaspiller une recherche. La validité du pseudonyme s'appuie
+maintenant sur `pseudo_exploitable`, qui fait déjà autorité ailleurs dans le
+projet — les deux se contredisaient.
+
+Effet de bord bienvenu : la partie locale des adresses électroniques avec un
+point (`jean.martin@…`) devient elle aussi un pivot exploitable.
+
+**Vérifié en conditions réelles le 30/07/2026** : investigation lancée depuis
+`https://www.instagram.com/mark.zuckerberg/` → compte Instagram enregistré à
+100 % (fourni par l'analyste, donc tenu pour certain), pseudonyme
+`mark.zuckerberg` extrait, recherche large Maigret déclenchée, **54 comptes
+trouvés** et 57 éléments dans le graphe. Avant le correctif, ce même lien
+donnait 1 seul nœud et aucune recherche.
 
 ### Démarrage en un clic (30/07/2026)
 
 `demarrer.bat` et `arreter.bat` à la racine du projet automatisent le
-lancement complet (Docker, API, worker, interface) et son arrêt. Détail dans
-la section « Relancer le projet » ci-dessous.
+lancement complet et son arrêt. Détail dans la section « Relancer le projet »
+ci-dessous.
+
+**Lenteur de démarrage corrigée.** L'interface paraissait très lente à
+charger. Vite n'y était pour rien (il démarre en 250 ms, mesuré) : le script
+lançait le worker Celery *juste avant* l'interface, et le chargement de la base
+Maigret (3221 sites) sature processeur et disque pendant environ deux minutes —
+l'interface démarrait donc sur une machine étranglée. Pire, le navigateur
+s'ouvrait après un délai fixe de 8 secondes, sans vérifier que quoi que ce soit
+soit prêt.
+
+Le script attend maintenant une disponibilité **réelle** à chaque étape
+(PostgreSQL via `pg_isready`, API via `/api/sante`, interface via une requête
+HTTP), prépare le code de l'interface avant d'ouvrir le navigateur, et ne lance
+le worker qu'**en dernier**. L'interface est donc utilisable immédiatement ; seule
+la première recherche attend le worker, ce que le script annonce explicitement.
 
 Le parcours complet a été exécuté en conditions réelles (Maigret sur de vrais
 pseudonymes, PostgreSQL, Redis, worker Celery, interface dans le navigateur). Tout
 fonctionne : inscription, recherche, corrélation, enrichissement, rebond automatique,
 graphe, explication des scores, exports, quotas et gating par plan.
 
-124 tests automatisés au vert.
+134 tests automatisés au vert.
 
 ### Points de départ multiples — disponibles dans l'interface
 
@@ -68,16 +117,17 @@ adaptée — détail dans [docs/ajouter-un-module.md](docs/ajouter-un-module.md)
 - Icônes des nœuds du graphe agrandies et recentrées. Deux formes (« tag » pour les
   pseudonymes alternatifs, « vee » pour les liens) ne centraient pas leur pictogramme
   sur leur centre visuel réel — corrigé par calcul géométrique exact à partir des
-  définitions de forme de Cytoscape. **Non vérifié visuellement cette session** : le
-  panneau de navigateur intégré n'était pas affiché côté utilisateur, empêchant toute
-  capture d'écran. À confirmer visuellement à la prochaine ouverture d'une
-  investigation avec plusieurs types de nœuds.
+  définitions de forme de Cytoscape. **Toujours pas vérifié visuellement** au
+  30/07/2026, après une seconde tentative : le panneau de navigateur intégré n'est
+  pas affiché côté utilisateur, ce qui empêche toute capture d'écran (le graphe se
+  rend bien, cela a été confirmé côté code). À confirmer d'un simple coup d'œil à la
+  prochaine ouverture d'une investigation comportant plusieurs types de nœuds.
 
 ## Relancer le projet
 
 **Double-cliquez sur `demarrer.bat`** à la racine du projet : il fait tout d'un coup
-(Docker, API, worker, interface) et ouvre le navigateur. Pour tout arrêter,
-`arreter.bat`.
+(Docker, API, interface, puis worker), attend que chaque brique réponde vraiment, et
+ouvre le navigateur. Pour tout arrêter, `arreter.bat`.
 
 Détail de ce que fait `demarrer.bat`, pour dépannage ou lancement manuel :
 

@@ -87,8 +87,17 @@ initiales.
 
 Une fois l'installation initiale faite (dépendances Python/Node, `.env` configuré —
 voir ci-dessous), double-cliquez sur **`demarrer.bat`** à la racine du projet. Il
-démarre PostgreSQL et Redis (Docker), l'API, le worker de tâches et l'interface web
-dans des fenêtres séparées, puis ouvre le navigateur automatiquement.
+démarre PostgreSQL et Redis (Docker), l'API, l'interface web puis le worker de tâches
+dans des fenêtres séparées, et ouvre le navigateur automatiquement.
+
+Le script attend que chaque brique réponde réellement avant de passer à la suivante
+(PostgreSQL via `pg_isready`, API via `/api/sante`, interface via une requête HTTP) :
+le navigateur ne s'ouvre donc jamais sur une application encore en train de démarrer.
+
+Le worker est lancé **en dernier**, volontairement : il charge la base Maigret de 3221
+sites, ce qui occupe le processeur et le disque pendant environ deux minutes. L'interface
+est utilisable immédiatement ; seule la première recherche attend que le worker affiche
+`ready` dans sa fenêtre.
 
 Pour tout arrêter : fermez les fenêtres ouvertes par `demarrer.bat`, puis
 double-cliquez sur **`arreter.bat`** (coupe aussi PostgreSQL et Redis).
@@ -353,7 +362,7 @@ votre-domaine.fr {
 cd backend && pytest -q
 ```
 
-124 tests couvrent le moteur de corrélation, les modules de site, les chercheurs et
+134 tests couvrent le moteur de corrélation, les modules de site, les chercheurs et
 points de départ multiples, les quotas et le gating par plan, l'isolation entre
 organisations, et le cycle complet d'investigation.
 Aucun n'exige de réseau, de PostgreSQL ni de Redis : ils tournent sur SQLite avec un
@@ -381,7 +390,7 @@ Les tests les plus importants à ne jamais laisser échouer :
 
 ## État du projet
 
-**Application complète et vérifiée de bout en bout** (124 tests automatisés, migration
+**Application complète et vérifiée de bout en bout** (134 tests automatisés, migration
 validée sur PostgreSQL 16).
 
 Parcours réellement exécuté le 29/07/2026, avec Maigret sur de vrais pseudonymes :

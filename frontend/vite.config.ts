@@ -6,8 +6,31 @@ import { defineConfig } from "vite";
 // de CORS et permet aux cookies httpOnly d'authentification de circuler.
 export default defineConfig({
   plugins: [react()],
+  // Dépendances pré-compilées au démarrage plutôt que découvertes en cours de
+  // route : sans cette liste, Vite les trouve pendant le premier chargement et
+  // recharge la page une fois la compilation faite, ce qui la fait paraître lente.
+  optimizeDeps: {
+    include: [
+      "react",
+      "react-dom",
+      "react-dom/client",
+      "react-router-dom",
+      "@tanstack/react-query",
+      "cytoscape",
+      "cytoscape-fcose",
+    ],
+  },
   server: {
     port: 5173,
+    // Traduit ces fichiers dès le démarrage, sans attendre la première visite.
+    warmup: {
+      clientFiles: [
+        "./index.html",
+        "./src/main.tsx",
+        "./src/App.tsx",
+        "./src/pages/Accueil.tsx",
+      ],
+    },
     proxy: {
       "/api": {
         target: "http://localhost:8000",
