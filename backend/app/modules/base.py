@@ -35,6 +35,34 @@ DOMAINES_NON_PIVOTABLES = {
     "wikipedia.org", "youtube.com", "google.com",
 }
 
+# Segments qui *précèdent* le nom d'utilisateur dans une adresse de profil :
+# `linkedin.com/in/jean-martin`, `reddit.com/user/jeanmartin`,
+# `steamcommunity.com/id/jeanmartin`. C'est le segment suivant qu'il faut retenir.
+SEGMENTS_PREFIXE_PROFIL = {
+    "in", "user", "users", "u", "profile", "profiles", "profil",
+    "people", "member", "members", "author", "id",
+}
+
+# Premiers segments qui signalent une page qui n'est pas un profil : une publication
+# (`instagram.com/p/ABC123`), un fil (`x.com/i/...`), un sous-forum
+# (`reddit.com/r/...`). Extraire un « pseudonyme » de ces adresses lancerait une
+# recherche sur un identifiant technique ou un mot de vocabulaire du site.
+SEGMENTS_NON_PROFIL = {
+    "p", "reel", "reels", "explore", "status", "statuses", "post", "posts",
+    "hashtag", "tag", "tags", "search", "watch", "channel", "c", "group",
+    "groups", "events", "pages", "share", "video", "videos", "photo", "photos",
+    "media", "stories", "story", "live", "shop", "accounts", "i", "intent",
+    "download", "feed", "notifications", "messages", "settings", "dashboard",
+    "wiki", "article", "articles", "questions", "comments", "r", "topic", "forum",
+}
+
+# Un chemin qui se termine par un nom de fichier n'est pas un profil
+# (`facebook.com/profile.php?id=…`, `site.fr/index.html`).
+EXTENSIONS_FICHIER = {
+    "php", "html", "htm", "asp", "aspx", "jsp", "cgi", "json", "xml",
+    "jpg", "jpeg", "png", "gif", "webp", "svg", "pdf", "txt",
+}
+
 
 @dataclass
 class InfoExtraite:
@@ -139,11 +167,20 @@ class ModuleSite(ABC):
 
     @staticmethod
     def pseudo_depuis_url(url: str) -> str | None:
-        """Déduit un pseudonyme du dernier segment d'une URL de profil.
+        """Déduit un pseudonyme d'une URL de profil.
 
-        Renvoie None pour les raccourcisseurs et les sites génériques, dont le chemin
-        ne désigne pas une personne.
+        Le nom d'utilisateur est cherché au **début** du chemin, pas à la fin : c'est
+        là qu'il se trouve dans la quasi-totalité des adresses de profil
+        (`instagram.com/jeanmartin`, `github.com/jeanmartin/un-depot`). Prendre le
+        dernier segment donnait « reels » pour `instagram.com/jeanmartin/reels/` et
+        l'identifiant du message pour `x.com/jeanmartin/status/1234`.
+
+        Renvoie None pour les raccourcisseurs, les sites génériques et les adresses
+        qui ne désignent pas un profil (publication, sous-forum, fichier).
         """
+        # Importé ici pour garder `modules` indépendant de `moteur.pivot` au chargement
+        from app.moteur.pivot.detecteur import pseudo_exploitable
+
         try:
             analyse = urlparse(url if "://" in url else f"https://{url}")
         except ValueError:
@@ -154,8 +191,28 @@ class ModuleSite(ABC):
         segments = [s for s in (analyse.path or "").split("/") if s]
         if not segments:
             return None
-        candidat = segments[-1].lstrip("@")
-        if len(candidat) < 3 or len(candidat) > 40 or "." in candidat:
+
+        premier = segments[0].lower()
+        if segments[0].startswith("@"):
+            # Forme « handle » : mastodon.social/@jeanmartin, tiktok.com/@jeanmartin
+            candidat = segments[0]
+        elif premier in SEGMENTS_PREFIXE_PROFIL:
+            if len(segments) < 2:
+                return None
+            candidat = segments[1]
+        elif premier in SEGMENTS_NON_PROFIL:
+            return None
+        else:
+            candidat = segments[0]
+
+        candidat = candidat.lstrip("@")
+        if "." in candidat and candidat.rsplit(".", 1)[-1].lower() in EXTENSIONS_FICHIER:
+            return None
+        # `pseudo_exploitable` fait autorité dans le projet sur ce qui constitue un
+        # pseudonyme recherchable : longueur, caractères admis (les points le sont —
+        # `jean.martin` est courant sur Instagram et TikTok), mots trop génériques,
+        # suites de chiffres.
+        if not pseudo_exploitable(candidat):
             return None
         return candidat
 

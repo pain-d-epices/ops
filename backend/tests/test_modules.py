@@ -106,6 +106,46 @@ def test_deduction_du_pseudo_depuis_une_url():
     assert ModuleSite.pseudo_depuis_url("https://github.com") is None
 
 
+def test_pseudo_depuis_url_accepte_les_points_dans_le_nom():
+    """Les points sont courants dans les noms d'utilisateur Instagram, TikTok et
+    Facebook. Les refuser privait ces liens de tout rebond."""
+    assert ModuleSite.pseudo_depuis_url("https://www.instagram.com/jean.martin/") == "jean.martin"
+    assert ModuleSite.pseudo_depuis_url("https://www.tiktok.com/@jean.martin") == "jean.martin"
+    assert ModuleSite.pseudo_depuis_url("https://www.facebook.com/jean.martin.9") == "jean.martin.9"
+
+
+def test_pseudo_depuis_url_ignore_les_sous_pages_de_profil():
+    """Le nom d'utilisateur est au début du chemin : les segments qui suivent sont des
+    sous-pages (onglets, publications), pas le pseudonyme."""
+    for url in (
+        "https://www.instagram.com/jeanmartin/reels/",
+        "https://www.instagram.com/jeanmartin/tagged/",
+        "https://x.com/jeanmartin/status/1234567890",
+        "https://github.com/jeanmartin/mon-depot",
+        "https://instagram.com/jeanmartin?hl=fr",
+    ):
+        assert ModuleSite.pseudo_depuis_url(url) == "jeanmartin", url
+
+
+def test_pseudo_depuis_url_suit_les_prefixes_de_profil():
+    assert ModuleSite.pseudo_depuis_url("https://www.linkedin.com/in/jean-martin/") == "jean-martin"
+    assert ModuleSite.pseudo_depuis_url("https://www.reddit.com/user/jeanmartin/") == "jeanmartin"
+    assert ModuleSite.pseudo_depuis_url("https://steamcommunity.com/id/jeanmartin") == "jeanmartin"
+
+
+def test_pseudo_depuis_url_ecarte_ce_qui_nest_pas_un_profil():
+    """Une publication, un sous-forum ou un identifiant technique ne sont pas des
+    pseudonymes : les rechercher gaspillerait une recherche."""
+    for url in (
+        "https://www.instagram.com/p/ABC123xyz/",          # une publication
+        "https://www.reddit.com/r/france/",                # un sous-forum
+        "https://www.facebook.com/profile.php?id=123",     # un nom de fichier
+        "https://steamcommunity.com/profiles/76561198000000000",  # un identifiant
+        "https://github.com/explore",                      # une page du site
+    ):
+        assert ModuleSite.pseudo_depuis_url(url) is None, url
+
+
 def test_nettoyage_html_preserve_les_urls_decoupees():
     """Mastodon découpe ses liens en plusieurs balises ; insérer une espace entre
     elles casserait l'URL, donc le pivot qui en découle."""
