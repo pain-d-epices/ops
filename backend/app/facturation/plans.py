@@ -16,6 +16,11 @@ PIVOT = "pivot"                            # pivot (au moins en mode supervisé)
 PIVOT_AUTOMATIQUE = "pivot_automatique"    # pivot sans validation humaine
 EXPORT_CSV = "export_csv"
 EXPORT_PDF = "export_pdf"
+#: Accès machine à machine (clé d'API), réservé au palier Entreprise.
+#: ATTENTION — **rien n'implémente encore cette fonctionnalité** : ni modèle de clé,
+#: ni authentification par clé, ni endpoint qui la vérifie. Le code n'est déclaré ici
+#: que pour préparer le terrain. Ne pas l'afficher comme disponible dans la grille
+#: commerciale avant de l'avoir construite. Voir docs/acces-api.md.
 API_PUBLIQUE = "api"
 RETENTION_ETENDUE = "retention_etendue"
 MULTI_UTILISATEURS = "multi_utilisateurs"
@@ -133,8 +138,8 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         nom_affiche="Pro",
         description=(
             "Pour les cabinets et rédactions : recherche sur la totalité des sites, "
-            "rebond automatique jusqu'à cinq niveaux, rapports PDF, accès API, "
-            "rétention étendue."
+            "rebond automatique jusqu'à cinq niveaux, rapports PDF, rétention "
+            "étendue."
         ),
         prix_mensuel_cents=9900,
         ordre=2,
@@ -143,9 +148,12 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         quota_utilisateurs=10,
         quota_investigations_actives=200,
         profondeur_pivot_max=5,
+        # Pas d'accès API à ce palier : l'usage machine à machine est le vecteur le
+        # plus direct d'automatisation de masse, donc réservé au palier où le client
+        # est identifié et accompagné.
         fonctionnalites=[
             MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
-            API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,
+            RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,
             *RECHERCHES_SPECIALISEES,
         ],
         max_points_depart=5,
@@ -166,6 +174,8 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         quota_utilisateurs=50,
         quota_investigations_actives=2000,
         profondeur_pivot_max=10,
+        # Seul palier ouvrant l'accès API — et encore : la fonctionnalité n'est pas
+        # construite (voir le commentaire d'`API_PUBLIQUE` plus haut).
         fonctionnalites=[
             MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
             API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,

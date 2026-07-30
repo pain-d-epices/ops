@@ -69,6 +69,11 @@ Deux garde-fous limitent les faux positifs :
 | Pivot | ❌ | supervisé | automatique | automatique |
 | Export CSV / PDF | ❌ | CSV | CSV + PDF | CSV + PDF |
 
+> **Accès API : pas encore construit.** Le code de fonctionnalité existe et n'est
+> accordé qu'au palier Entreprise, mais rien ne le vérifie — ni clé, ni
+> authentification machine. À ne pas annoncer comme disponible dans une page de vente.
+> État des lieux et travail restant : [docs/acces-api.md](docs/acces-api.md).
+
 Le palier gratuit sert la **découverte** : il permet de juger la qualité de la
 corrélation sur les deux points de départ les plus courants — un pseudonyme et une
 adresse électronique — sans ouvrir ce qui fait la valeur du produit. Trois curseurs

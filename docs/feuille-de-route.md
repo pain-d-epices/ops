@@ -251,7 +251,8 @@ celles appliquées par le code (`app/facturation/plans.py`) et verrouillées par
 | Rebond automatique (sans validation) | ❌ | ❌ | ✅ | ✅ |
 | Points de départ multiples | ❌ | 2 maximum | 5 | illimité |
 | Export CSV | ❌ | ✅ | ✅ | ✅ |
-| Export PDF, API, rétention étendue | ❌ | ❌ | ✅ | ✅ |
+| Export PDF, rétention étendue | ❌ | ❌ | ✅ | ✅ |
+| Accès API *(non construit)* | ❌ | ❌ | ❌ | à ouvrir au cas par cas |
 
 Les fuites de données (HIBP) et le connecteur X/Twitter, envisagés pour les paliers
 Pro/Entreprise, sont écartés : outils payants, exclus par consigne du client.
