@@ -83,7 +83,20 @@ initiales.
 - Docker et Docker Compose (recommandé), **ou** Python 3.11+, PostgreSQL 16 et Redis 7
 - 2 Go de RAM minimum, 4 Go recommandés (Maigret est gourmand pendant les scans)
 
-### Démarrage avec Docker (recommandé)
+### Démarrage en un clic (développement local sous Windows)
+
+Une fois l'installation initiale faite (dépendances Python/Node, `.env` configuré —
+voir ci-dessous), double-cliquez sur **`demarrer.bat`** à la racine du projet. Il
+démarre PostgreSQL et Redis (Docker), l'API, le worker de tâches et l'interface web
+dans des fenêtres séparées, puis ouvre le navigateur automatiquement.
+
+Pour tout arrêter : fermez les fenêtres ouvertes par `demarrer.bat`, puis
+double-cliquez sur **`arreter.bat`** (coupe aussi PostgreSQL et Redis).
+
+Ces deux scripts reproduisent exactement les commandes détaillées ci-dessous ; ils
+supposent que l'installation initiale (prochaine section) a déjà été faite une fois.
+
+### Démarrage avec Docker (recommandé pour un déploiement, pas pour le développement)
 
 ```bash
 cp .env.example .env
@@ -111,7 +124,9 @@ paliers d'abonnement automatiquement.
 - Documentation interactive de l'API : http://localhost:8000/api/docs
 - Sonde de santé : http://localhost:8000/api/sante
 
-### Démarrage sans Docker (développement)
+### Installation locale (sans Docker, pour le développement)
+
+C'est l'installation que suppose `demarrer.bat` : à faire une seule fois.
 
 ```bash
 cd backend

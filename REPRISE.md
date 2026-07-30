@@ -1,8 +1,35 @@
 # Où reprendre
 
-Point d'étape au **29/07/2026**.
+Point d'étape au **30/07/2026**.
 
 ## État : application vérifiée de bout en bout
+
+### Élément de départ principal de type quelconque (30/07/2026)
+
+Jusqu'ici, seul l'élément *principal* d'une investigation devait être un
+pseudonyme ; les éléments complémentaires pouvaient déjà être d'un autre type.
+Ce n'est plus le cas : l'élément principal peut désormais lui aussi être une
+adresse électronique, un numéro de téléphone, un compte connu ou une adresse
+postale, avec le même contrôle de type et de droits par plan que les éléments
+complémentaires.
+
+Quand l'élément principal n'est pas un pseudonyme, la recherche large
+(Maigret) part du premier pseudonyme découvert par les chercheurs spécialisés
+(ex. partie locale d'une adresse électronique, pseudo extrait d'une URL de
+compte) ; si aucun n'est découvert, Maigret est simplement sauté et
+l'investigation se termine avec les seuls résultats des chercheurs
+spécialisés.
+
+Backend, API, schéma, tâche Celery et interface (formulaire d'accueil) mis à
+jour ; 6 nouveaux tests (130 tests backend au vert au total). Non vérifié
+visuellement dans le navigateur cette session — à confirmer à la prochaine
+ouverture de l'interface.
+
+### Démarrage en un clic (30/07/2026)
+
+`demarrer.bat` et `arreter.bat` à la racine du projet automatisent le
+lancement complet (Docker, API, worker, interface) et son arrêt. Détail dans
+la section « Relancer le projet » ci-dessous.
 
 Le parcours complet a été exécuté en conditions réelles (Maigret sur de vrais
 pseudonymes, PostgreSQL, Redis, worker Celery, interface dans le navigateur). Tout
@@ -47,6 +74,12 @@ adaptée — détail dans [docs/ajouter-un-module.md](docs/ajouter-un-module.md)
   investigation avec plusieurs types de nœuds.
 
 ## Relancer le projet
+
+**Double-cliquez sur `demarrer.bat`** à la racine du projet : il fait tout d'un coup
+(Docker, API, worker, interface) et ouvre le navigateur. Pour tout arrêter,
+`arreter.bat`.
+
+Détail de ce que fait `demarrer.bat`, pour dépannage ou lancement manuel :
 
 ```bash
 docker compose up -d postgres redis
