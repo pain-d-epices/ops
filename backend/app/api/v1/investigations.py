@@ -13,7 +13,11 @@ from sqlalchemy import func, select
 
 from app.config import config_metier
 from app.db.base import maintenant
-from app.facturation.garde import mode_pivot_effectif, profondeur_pivot_autorisee
+from app.facturation.garde import (
+    mode_pivot_effectif,
+    profondeur_pivot_autorisee,
+    sites_analysables,
+)
 from app.facturation.plans import EXPORT_CSV
 from app.facturation.quotas import QuotaDepasse, consommer_quota, rembourser_quota
 from app.modeles.enums import (
@@ -226,8 +230,7 @@ def creer_investigation(
     mode = mode_pivot_effectif(
         ctx.plan, ctx.organisation, demande.mode_pivot.value if demande.mode_pivot else None
     )
-    top_sites_max = int(config_metier().obtenir("maigret.top_sites", 500))
-    top_sites = min(demande.top_sites or top_sites_max, 3000)
+    top_sites = sites_analysables(ctx.plan, demande.top_sites)
 
     jours_retention = ctx.organisation.retention_jours or int(
         config_metier().obtenir("retention.jours_defaut", 90)
@@ -332,7 +335,12 @@ def lister_types_recherche(
     # Le pseudonyme d'abord (c'est le point de départ obligatoire), puis les autres
     # par ordre alphabétique de libellé, pour un affichage stable.
     types.sort(key=lambda t: (t.type != TypePointDepart.PSEUDO.value, t.libelle))
-    return TypesRechercheSortie(types=types, max_points_depart=ctx.plan.max_points_depart)
+    return TypesRechercheSortie(
+        types=types,
+        max_points_depart=ctx.plan.max_points_depart,
+        max_sites_analyses=ctx.plan.max_sites_analyses,
+        nom_plan=ctx.plan.nom_affiche,
+    )
 
 
 def _detail(ctx: ContexteRequete, investigation: Investigation) -> InvestigationDetaillee:

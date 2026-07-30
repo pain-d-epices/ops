@@ -47,7 +47,7 @@ def test_quota_bloque_au_dela_de_la_limite():
         plan = plan_actif(session, organisation_id)
         assert plan.code == "free"
 
-        # Le palier gratuit autorise 5 recherches par mois
+        # On consomme exactement le quota mensuel du palier, quel qu'il soit
         for _ in range(plan.quota_recherches_mois):
             consommer_quota(session, organisation_id, plan, "recherches")
         session.commit()
@@ -109,7 +109,7 @@ def test_limite_dinvestigations_simultanees():
         assert codes[-1] == 429
 
         # Le quota mensuel, lui, n'est pas épuisé : seules `maximum` recherches ont
-        # été consommées, pas les 5 autorisées.
+        # été consommées, et non la totalité de celles autorisées sur le mois.
         consommees = etat_quotas(session, organisation_id, plan)["recherches"].consomme
         assert consommees == maximum
         assert consommees < plan.quota_recherches_mois
@@ -213,13 +213,19 @@ def test_profondeur_bornee_par_le_plan_puis_par_le_serveur():
 
         passer_au_plan(session, organisation_id, "starter")
         plan_starter = plan_actif(session, organisation_id)
-        assert profondeur_pivot_autorisee(plan_starter, organisation, 9) == 1
+        assert profondeur_pivot_autorisee(plan_starter, organisation, 9) == 2
 
         passer_au_plan(session, organisation_id, "pro")
         plan_pro = plan_actif(session, organisation_id)
-        # Plan Pro : 3 niveaux, malgré une demande de 9
-        assert profondeur_pivot_autorisee(plan_pro, organisation, 9) == 3
+        # Plan Pro : 5 niveaux, malgré une demande de 9
+        assert profondeur_pivot_autorisee(plan_pro, organisation, 9) == 5
         assert profondeur_pivot_autorisee(plan_pro, organisation, 2) == 2
+
+        # Plan Entreprise : 10 niveaux. Le plafond serveur doit être au moins égal à ce
+        # que le palier le plus élevé annonce, sans quoi il l'écraserait en silence.
+        passer_au_plan(session, organisation_id, "entreprise")
+        plan_entreprise = plan_actif(session, organisation_id)
+        assert profondeur_pivot_autorisee(plan_entreprise, organisation, 10) == 10
     finally:
         session.close()
 

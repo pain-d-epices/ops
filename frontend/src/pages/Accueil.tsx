@@ -40,6 +40,18 @@ function dureeEstimee(nombreSites: number): string {
   return `environ ${minutes} minute${minutes > 1 ? "s" : ""}`;
 }
 
+/** Taille de la base de sites de Maigret : ce que signifie « recherche maximale ». */
+const TOTALITE_DES_SITES = 3000;
+
+/** Paliers proposés pour le nombre de sites, du plus rapide au plus complet. */
+const PALIERS_SITES = [
+  { valeur: 50, libelle: "50 — les plus fréquentés" },
+  { valeur: 200, libelle: "200" },
+  { valeur: 500, libelle: "500 — recommandé" },
+  { valeur: 1000, libelle: "1000" },
+  { valeur: TOTALITE_DES_SITES, libelle: "Tous les sites" },
+];
+
 export function PageAccueil() {
   return (
     <div className="grille-tableau-bord">
@@ -82,6 +94,13 @@ function FormulaireInvestigation() {
 
   const typesDisponibles = typesRecherche?.types ?? [];
   const typePrincipalEffectif = typeEffectif(pointPrincipal);
+
+  // Nombre de sites : le plan impose un plafond (0 = recherche maximale). La valeur
+  // choisie est ramenée à ce plafond, et non refusée — le serveur la bornerait de
+  // toute façon, autant afficher tout de suite ce qui sera réellement analysé.
+  const plafondSites = typesRecherche?.max_sites_analyses || TOTALITE_DES_SITES;
+  const nombreSitesEffectif = Math.min(nombreSites, plafondSites);
+  const plafondAtteint = plafondSites < TOTALITE_DES_SITES;
   // Une ligne en défaut (type non couvert par le plan, ou non pris en charge) bloque
   // l'envoi : mieux vaut le dire tout de suite que faire échouer la requête.
   const problemePrincipal = problemeLigne(pointPrincipal, typesDisponibles);
@@ -112,7 +131,7 @@ function FormulaireInvestigation() {
         titre: titre.trim() || null,
         profondeur_pivot: profondeur,
         mode_pivot: modePivot,
-        top_sites: nombreSites,
+        top_sites: nombreSitesEffectif,
         sites_exclus: sitesExclus
           .split(",")
           .map((s) => s.trim())
@@ -171,14 +190,16 @@ function FormulaireInvestigation() {
         <div className="aide">
           {typePrincipalEffectif === "pseudo" ? (
             <>
-              Recherche sur {formaterNombre(nombreSites)} sites — {dureeEstimee(nombreSites)}.
-              Vous pouvez quitter la page, le traitement continue.
+              Recherche sur {formaterNombre(nombreSitesEffectif)} sites —{" "}
+              {dureeEstimee(nombreSitesEffectif)}. Vous pouvez quitter la page, le
+              traitement continue.
             </>
           ) : (
             <>
               La recherche est adaptée au type choisi. Si un pseudonyme en est déduit
               (adresse électronique, compte…), la recherche large sur{" "}
-              {formaterNombre(nombreSites)} sites est aussi lancée automatiquement.
+              {formaterNombre(nombreSitesEffectif)} sites est aussi lancée
+              automatiquement.
             </>
           )}
         </div>
@@ -281,20 +302,32 @@ function FormulaireInvestigation() {
             <label htmlFor="nombre-sites">Nombre de sites à analyser</label>
             <select
               id="nombre-sites"
-              value={nombreSites}
+              value={nombreSitesEffectif}
               onChange={(e) => setNombreSites(Number(e.target.value))}
             >
-              <option value={50}>50 — les plus fréquentés (environ 25 secondes)</option>
-              <option value={200}>200 (environ 1 minute)</option>
-              <option value={500}>500 — recommandé (environ 2 minutes)</option>
-              <option value={1000}>1000 (environ 4 minutes)</option>
-              <option value={3000}>Tous les sites (environ 13 minutes)</option>
+              {PALIERS_SITES.map((palier) => {
+                const horsPlan = palier.valeur > plafondSites;
+                return (
+                  <option key={palier.valeur} value={palier.valeur} disabled={horsPlan}>
+                    {palier.libelle} ({dureeEstimee(palier.valeur)})
+                    {horsPlan ? ` — non inclus dans le plan ${typesRecherche?.nom_plan ?? "actuel"}` : ""}
+                  </option>
+                );
+              })}
             </select>
             <div className="aide">
               C'est le principal levier sur la durée d'une recherche. Les sites sont
               classés par fréquentation : les premiers sont les plus susceptibles de
               donner un résultat.
             </div>
+            {plafondAtteint && (
+              <div className="aide aide-alerte">
+                Le plan {typesRecherche?.nom_plan ?? "actuel"} analyse au maximum{" "}
+                {formaterNombre(plafondSites)} sites par recherche.{" "}
+                <Link to="/abonnement">Passer à un palier supérieur</Link> pour élargir
+                la couverture.
+              </div>
+            )}
           </div>
 
           <div className="champ">

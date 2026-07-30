@@ -135,6 +135,10 @@ export interface TypesRecherche {
   types: TypeRecherche[];
   /** Points de départ simultanés, pseudonyme compris ; 0 = illimité. */
   max_points_depart: number;
+  /** Sites analysables par recherche large ; 0 = sans limite. */
+  max_sites_analyses: number;
+  /** Nom du palier actif, pour l'expliquer dans le formulaire. */
+  nom_plan: string;
 }
 
 export interface InvestigationDetaillee extends InvestigationResumee {

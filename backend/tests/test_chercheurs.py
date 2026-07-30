@@ -121,20 +121,23 @@ def _client(email: str) -> tuple[TestClient, str]:
     return client, reponse["organisation_active"]
 
 
-def test_plan_gratuit_refuse_les_recherches_specialisees():
+def test_plan_gratuit_ouvre_le_pseudonyme_et_l_adresse_electronique_seulement():
+    """Décision produit : le palier gratuit permet de juger la qualité de la
+    corrélation sur les deux points de départ les plus courants — un pseudonyme et
+    une adresse électronique — et rien de plus."""
     session = FabriqueSession()
     try:
         _, organisation_id = _client("chercheurs_gratuit@test.fr")
         plan = plan_actif(session, organisation_id)
 
-        for type_point in ("email", "telephone", "adresse", "compte"):
+        for type_point in ("pseudo", "email"):
+            autorise, motif = chercheur_autorise(type_point, plan)
+            assert autorise, f"{type_point} devrait être ouvert au palier gratuit : {motif}"
+
+        for type_point in ("telephone", "adresse", "compte"):
             autorise, motif = chercheur_autorise(type_point, plan)
             assert not autorise, f"{type_point} ne doit pas être ouvert au palier gratuit"
             assert motif
-
-        # La recherche par pseudonyme reste ouverte : c'est l'appel du produit
-        autorise, _ = chercheur_autorise("pseudo", plan)
-        assert autorise
     finally:
         session.close()
 
@@ -275,9 +278,11 @@ def test_types_recherche_signale_ce_que_le_plan_gratuit_refuse():
     # Le pseudonyme est toujours accessible et arrive en premier
     assert donnees["types"][0]["type"] == "pseudo"
     assert par_type["pseudo"]["autorise"] is True
+    # L'adresse électronique est ouverte elle aussi au palier gratuit
+    assert par_type["email"]["autorise"] is True
     assert donnees["max_points_depart"] == 1
 
-    for type_point in ("email", "telephone", "adresse", "compte"):
+    for type_point in ("telephone", "adresse", "compte"):
         assert par_type[type_point]["autorise"] is False
         assert par_type[type_point]["motif"], f"{type_point} refusé sans motif"
         # Chaque type propose un exemple de saisie, affiché en aide dans le formulaire

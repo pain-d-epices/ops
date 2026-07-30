@@ -15,6 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.base import maintenant
+from app.facturation.abonnements import plan_actif
+from app.facturation.garde import sites_sensibles_autorises
 from app.infra.evenements import TypeEvenement, bus
 from app.modeles.enums import (
     NiveauConfiance,
@@ -36,6 +38,7 @@ from app.moteur.correlation.scoreur import scorer_tous
 from app.moteur.graphe.depot import DepotGraphe
 from app.moteur.maigret_runner import ResultatRecherche, ResultatSite
 from app.moteur.pivot.detecteur import DetecteurPivot, DonneeCandidate
+from app.moteur.sites_sensibles import filtrer_sites_sensibles
 
 journal = logging.getLogger(__name__)
 
@@ -44,6 +47,8 @@ journal = logging.getLogger(__name__)
 class BilanEnregistrement:
     profils_crees: int = 0
     profils_existants: int = 0
+    #: comptes écartés parce que le plan n'ouvre pas les sites sensibles
+    profils_filtres: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -59,9 +64,26 @@ def enregistrer_resultats_maigret(
     profondeur: int = 0,
     profil_origine_id: str | None = None,
 ) -> BilanEnregistrement:
-    """Crée les profils trouvés et les nœuds de graphe correspondants."""
+    """Crée les profils trouvés et les nœuds de graphe correspondants.
+
+    Point de passage **unique** de tout compte découvert, quelle que soit sa source
+    (Maigret, user-scanner, chercheur spécialisé). C'est donc ici qu'est appliqué le
+    filtrage des sites sensibles : le placer dans chaque runner obligerait à y penser
+    à chaque nouveau chercheur.
+    """
     bilan = BilanEnregistrement()
     depot = DepotGraphe(session, investigation.id, investigation.organisation_id)
+
+    comptes = resultat.comptes_trouves
+    if not sites_sensibles_autorises(plan_actif(session, investigation.organisation_id)):
+        comptes, ecartes = filtrer_sites_sensibles(comptes)
+        bilan.profils_filtres = ecartes
+        if ecartes:
+            journal.info(
+                "%d compte(s) sur sites sensibles écarté(s) pour l'investigation %s "
+                "(plan sans accès aux sites sensibles)",
+                ecartes, investigation.id,
+            )
 
     # Nœud racine : le pseudonyme recherché lors de cette exécution
     noeud_pseudo = depot.obtenir_ou_creer_noeud(
@@ -71,7 +93,7 @@ def enregistrer_resultats_maigret(
         meta={"execution_id": execution.id},
     )
 
-    for site in resultat.comptes_trouves:
+    for site in comptes:
         profil, cree = _creer_ou_recuperer_profil(
             session, investigation, execution, site, profondeur, profil_origine_id
         )

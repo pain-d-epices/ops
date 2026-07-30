@@ -4,6 +4,76 @@ Point d'étape au **30/07/2026**.
 
 ## État : application vérifiée de bout en bout
 
+### Nouvelle grille tarifaire (30/07/2026)
+
+Grille **arrêtée**, appliquée par le code et verrouillée par un test
+(`test_quotas_et_rebonds_des_quatre_paliers` : une modification involontaire d'un
+quota est un incident commercial, pas un détail technique).
+
+| | Gratuit | Starter | Pro | Entreprise |
+|---|---|---|---|---|
+| Recherches / mois | 15 | 100 | 500 | 2500 |
+| Rebonds | ❌ | 2 | 5 | 10 |
+| Sites par recherche | 200 | 1000 | tous | tous |
+| Types de recherche | pseudo + mail | tous | tous | tous |
+| Sites sensibles | ❌ | ✅ | ✅ | ✅ |
+
+Trois points d'attention rencontrés :
+
+- **Un plafond serveur dur à 4 rebonds** (`pivot.profondeur_plafond_serveur`)
+  aurait écrasé en silence les 5 et 10 rebonds vendus. Relevé à 10 ; c'est
+  `max_recherches_par_investigation` qui contient réellement le coût, pas la
+  profondeur.
+- **Le nombre de sites** est un nouveau champ de plan (`max_sites_analyses`,
+  0 = sans limite), donc une colonne et une migration Alembic. Le sélecteur du
+  formulaire grise les paliers hors plan au lieu de laisser la requête échouer.
+- **Les sites sensibles** ne peuvent pas être identifiés par les seules étiquettes
+  de Maigret : une quinzaine de sites manifestement adultes n'en portent aucune
+  (Fansly, Eporner, AdultFriendFinder…). Un filtrage par mots-clés a été écarté —
+  il produit des faux positifs (« illustrators.ru » contient « lust »,
+  « antiscam.space » contient « cam »). D'où deux sources : les étiquettes, plus
+  une liste explicite de domaines. Détail dans
+  `backend/app/moteur/sites_sensibles.py`.
+
+Le filtrage est appliqué à l'**enregistrement** des comptes, point de passage unique
+de toute découverte quelle que soit sa source (Maigret, user-scanner, chercheur
+spécialisé) : le placer dans chaque runner obligerait à y penser à chaque nouveau
+chercheur.
+
+Après un `git pull` sur une autre machine, appliquer :
+
+```bash
+cd backend && .venv/Scripts/python -m alembic upgrade head && .venv/Scripts/python -m app.scripts.initialiser_plans
+```
+
+### Icônes du graphe : taille, centrage et stabilité au zoom (30/07/2026)
+
+Le problème signalé depuis deux sessions est résolu, et **vérifié par la mesure**
+cette fois. Trois défauts distincts, aucun visible à la lecture du code :
+
+1. `background-position-x/y` de Cytoscape ne place pas le centre de l'image : le
+   pourcentage interpole l'espace *libre* autour d'elle. Avec une icône occupant
+   82 % du nœud, demander « 42 % » ne la décalait que de 1,4 % — la correction de
+   centrage de la session précédente était donc quasiment sans effet.
+2. L'icône faisait 82 % du cadre pour **toutes** les formes, alors qu'un chevron
+   n'offre que 33 % de place et un losange 50 %. L'icône débordait de la forme.
+3. Un SVG déclaré avec `viewBox` seul n'a pas de taille intrinsèque : le navigateur
+   lui attribue 150 × 150 (mesuré), d'où un rendu variable selon le zoom.
+
+Toute la géométrie est désormais portée par le SVG, qui déclare ses dimensions.
+Cytoscape reçoit une consigne unique pour tous les types : « dessine cette image sur
+100 % du nœud, centrée ». L'échelle et le décalage viennent du plus grand carré
+inscriptible dans chaque forme, calculé numériquement à partir des polygones réels de
+Cytoscape. La taille des nœuds compense la place offerte par leur forme, de sorte que
+tous les pictogrammes s'affichent à la même taille (26 à 36 px, contre 14 à 39 px).
+
+**Vérification** : le panneau navigateur n'étant pas affiché côté utilisateur,
+`requestAnimationFrame` ne se déclenche pas et Cytoscape ne peint jamais — aucune
+capture d'écran n'est possible. Contourné avec `cy.png()`, qui force un rendu
+synchrone, puis mesure des pixels : côté de l'icône identique aux zooms 1 et 3
+(nœud rendu de 78 à 234 px), conforme à la cible à 0,005 près, décalages stables, et
+**100 % de l'encre à l'intérieur de la forme**.
+
 ### Élément de départ principal de type quelconque (30/07/2026)
 
 Jusqu'ici, seul l'élément *principal* d'une investigation devait être un

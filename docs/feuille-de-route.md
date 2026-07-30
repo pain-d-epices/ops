@@ -230,32 +230,51 @@ qu'à brancher les nouveaux chercheurs dessus.
 
 ---
 
-## Répartition proposée par palier
+## Répartition par palier
 
-Mise à jour suite à votre consigne : recherche par e-mail/téléphone/adresse et outils
-spécialisés (modules, `user-scanner`) disponibles dès le palier Starter, au même titre
-que les modules d'enrichissement existants.
+**Arrêtée le 30/07/2026** — ce n'est plus une proposition. Les valeurs ci-dessous sont
+celles appliquées par le code (`app/facturation/plans.py`) et verrouillées par un test
+(`test_quotas_et_rebonds_des_quatre_paliers`).
 
-| Fonctionnalité | Gratuit | Starter | Pro | Entreprise |
+| | Gratuit | Starter | Pro | Entreprise |
 |---|---|---|---|---|
+| **Recherches par mois** | 15 | 100 | 500 | 2500 |
+| **Rebonds (profondeur de pivot)** | ❌ | 2 | 5 | 10 |
+| **Sites par recherche** | 200 | 1000 | tous | tous |
 | Recherche par pseudonyme | ✅ | ✅ | ✅ | ✅ |
-| Modules d'enrichissement (tous, y compris les nouveaux) | ❌ | ✅ | ✅ | ✅ |
-| **Démarrer depuis un compte** | ❌ | ✅ | ✅ | ✅ |
-| **Recherche par e-mail** | ❌ | ✅ | ✅ | ✅ |
+| **Recherche par e-mail** | ✅ | ✅ | ✅ | ✅ |
 | **Recherche par téléphone** | ❌ | ✅ | ✅ | ✅ |
 | **Recherche par adresse** | ❌ | ✅ | ✅ | ✅ |
-| **Points de départ multiples** | ❌ | 2 maximum | 5 | illimité |
+| **Démarrer depuis un compte** | ❌ | ✅ | ✅ | ✅ |
+| **Résultats de sites sensibles** | ❌ | ✅ | ✅ | ✅ |
+| Modules d'enrichissement | ❌ | ✅ | ✅ | ✅ |
+| Rebond automatique (sans validation) | ❌ | ❌ | ✅ | ✅ |
+| Points de départ multiples | ❌ | 2 maximum | 5 | illimité |
+| Export CSV | ❌ | ✅ | ✅ | ✅ |
+| Export PDF, API, rétention étendue | ❌ | ❌ | ✅ | ✅ |
 
 Les fuites de données (HIBP) et le connecteur X/Twitter, envisagés pour les paliers
 Pro/Entreprise, sont écartés : outils payants, exclus par consigne du client.
 
-Ce qui reste échelonné par palier, et pourquoi : la **profondeur de rebond** et le
-**nombre de points de départ simultanés** restent les vrais leviers de coût
-d'infrastructure (chaque point de départ ou niveau de rebond multiplie les requêtes
-sortantes) — c'est sur ces deux curseurs que la progression Starter → Pro → Entreprise
-continue de se justifier, plutôt que sur l'accès aux types de recherche eux-mêmes.
+### Ce qui structure la grille
 
-À ajuster ensemble : cette répartition reste une proposition.
+Le palier gratuit sert la **découverte** : il permet de juger la qualité de la
+corrélation sur les deux points de départ les plus courants — un pseudonyme et une
+adresse électronique — sans ouvrir ce qui fait la valeur du produit.
+
+Trois curseurs portent la progression, tous trois directement liés au coût
+d'infrastructure, ce qui rend la montée en gamme défendable auprès du client :
+
+1. le **volume mensuel** de recherches ;
+2. la **profondeur de rebond** — chaque niveau multiplie les requêtes sortantes ;
+3. le **nombre de sites analysés** par recherche — c'est aussi le principal levier
+   sur la durée d'une recherche (0,25 s par site environ).
+
+Les **sites sensibles** (pornographie) sont exclus du palier gratuit. C'est une limite
+commerciale, mais aussi une précaution : un compte de ce type est la donnée la plus
+sensible qu'une investigation puisse révéler, et le palier gratuit n'est soumis à
+aucune vérification d'usage. Détail de l'implémentation dans
+`app/moteur/sites_sensibles.py`.
 
 ---
 

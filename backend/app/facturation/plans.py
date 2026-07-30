@@ -19,6 +19,9 @@ EXPORT_PDF = "export_pdf"
 API_PUBLIQUE = "api"
 RETENTION_ETENDUE = "retention_etendue"
 MULTI_UTILISATEURS = "multi_utilisateurs"
+#: Accès aux comptes trouvés sur des sites à caractère sexuel. Absent du palier
+#: gratuit : ces résultats sont filtrés avant enregistrement (voir `maigret_runner`).
+SITES_SENSIBLES = "sites_sensibles"
 
 # --- Types de recherche (disponibles dès le palier Starter) ------------------
 # Ces codes correspondent au champ `fonctionnalite_requise` des chercheurs : le
@@ -40,6 +43,9 @@ RECHERCHES_SPECIALISEES = [
 
 CODE_PLAN_GRATUIT = "free"
 
+#: Sens de `max_sites_analyses` et `max_points_depart` : 0 signifie « sans limite ».
+SANS_LIMITE = 0
+
 
 @dataclass
 class DefinitionPlan:
@@ -56,95 +62,119 @@ class DefinitionPlan:
     fonctionnalites: list[str] = field(default_factory=list)
     #: nombre de points de départ acceptés simultanément dans une même investigation
     max_points_depart: int = 1
+    #: nombre maximal de sites analysables par recherche large ; 0 = sans limite
+    max_sites_analyses: int = 200
 
 
-# Le palier gratuit est volontairement limité : recherche Maigret + corrélation
-# de base uniquement. Les modules et le pivot — le vrai différenciateur du produit —
-# sont réservés aux plans payants.
+# Ce qui distingue les paliers, dans l'ordre d'importance commerciale :
+#
+#   |                      | Gratuit      | Starter | Pro      | Entreprise |
+#   |----------------------|--------------|---------|----------|------------|
+#   | Recherches par mois  | 15           | 100     | 500      | 2500       |
+#   | Rebonds (pivot)      | 0            | 2       | 5        | 10         |
+#   | Sites par recherche  | 200          | 1000    | tous     | tous       |
+#   | Types de recherche   | pseudo, mail | tous    | tous     | tous       |
+#   | Sites sensibles      | non          | oui     | oui      | oui        |
+#
+# Le palier gratuit sert la découverte : il permet de juger la qualité de la
+# corrélation sur un pseudonyme ou une adresse, sans ouvrir ce qui fait la valeur
+# du produit (modules d'enrichissement, rebond, volume, couverture complète).
 PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
     DefinitionPlan(
         code=CODE_PLAN_GRATUIT,
         nom_affiche="Gratuit",
         description=(
-            "Découverte : recherche de pseudonyme sur les principaux sites et corrélation "
-            "de base. Modules d'enrichissement et pivot non inclus."
+            "Découverte : recherche par pseudonyme ou adresse électronique sur les "
+            "200 principaux sites, et corrélation de base. Modules d'enrichissement "
+            "et rebond non inclus."
         ),
         prix_mensuel_cents=0,
         ordre=0,
-        quota_recherches_mois=5,
+        quota_recherches_mois=15,
         quota_enrichissements_mois=0,
         quota_utilisateurs=1,
         quota_investigations_actives=3,
         profondeur_pivot_max=0,
-        fonctionnalites=[],
+        # Seule la recherche par adresse électronique est ouverte en plus du
+        # pseudonyme, ce dernier n'exigeant aucune fonctionnalité (c'est la base).
+        # Téléphone, adresse postale, départ depuis un compte et combinaison de
+        # plusieurs éléments restent réservés aux paliers payants.
+        fonctionnalites=[RECHERCHE_EMAIL],
         max_points_depart=1,
+        max_sites_analyses=200,
     ),
     DefinitionPlan(
         code="starter",
         nom_affiche="Starter",
         description=(
-            "Pour l'investigateur indépendant : tous les modules d'enrichissement, "
-            "recherche par adresse électronique, téléphone et adresse postale, "
-            "pivot supervisé sur un niveau, export CSV."
+            "Pour l'investigateur indépendant : tous les types de recherche, tous les "
+            "modules d'enrichissement, rebond supervisé sur deux niveaux, jusqu'à "
+            "1000 sites par recherche, export CSV."
         ),
         prix_mensuel_cents=2900,
         ordre=1,
-        quota_recherches_mois=50,
+        quota_recherches_mois=100,
         quota_enrichissements_mois=500,
         quota_utilisateurs=3,
         quota_investigations_actives=25,
-        profondeur_pivot_max=1,
+        profondeur_pivot_max=2,
         # Tous les types de recherche sont ouverts dès ce palier : ce qui distingue
-        # les paliers supérieurs, c'est le volume et la profondeur, pas l'accès aux
-        # fonctionnalités d'investigation elles-mêmes.
+        # les paliers supérieurs, c'est le volume, la profondeur de rebond et la
+        # couverture en nombre de sites, pas l'accès aux types de recherche.
         fonctionnalites=[
-            MODULES, PIVOT, EXPORT_CSV, MULTI_UTILISATEURS, *RECHERCHES_SPECIALISEES
+            MODULES, PIVOT, EXPORT_CSV, MULTI_UTILISATEURS, SITES_SENSIBLES,
+            *RECHERCHES_SPECIALISEES,
         ],
         max_points_depart=2,
+        max_sites_analyses=1000,
     ),
     DefinitionPlan(
         code="pro",
         nom_affiche="Pro",
         description=(
-            "Pour les cabinets et rédactions : pivot automatique jusqu'à trois niveaux, "
-            "rapports PDF, accès API, rétention étendue."
+            "Pour les cabinets et rédactions : recherche sur la totalité des sites, "
+            "rebond automatique jusqu'à cinq niveaux, rapports PDF, accès API, "
+            "rétention étendue."
         ),
         prix_mensuel_cents=9900,
         ordre=2,
-        quota_recherches_mois=300,
+        quota_recherches_mois=500,
         quota_enrichissements_mois=5000,
         quota_utilisateurs=10,
         quota_investigations_actives=200,
-        profondeur_pivot_max=3,
+        profondeur_pivot_max=5,
         fonctionnalites=[
             MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
-            API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS,
+            API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,
             *RECHERCHES_SPECIALISEES,
         ],
         max_points_depart=5,
+        # Recherche maximale : aucune borne sur le nombre de sites analysés.
+        max_sites_analyses=SANS_LIMITE,
     ),
     DefinitionPlan(
         code="entreprise",
         nom_affiche="Entreprise",
         description=(
-            "Volume élevé, équipes étendues, profondeur de pivot maximale et "
+            "Volume élevé, équipes étendues, rebond jusqu'à dix niveaux et "
             "accompagnement dédié."
         ),
         prix_mensuel_cents=29900,
         ordre=3,
-        quota_recherches_mois=2000,
+        quota_recherches_mois=2500,
         quota_enrichissements_mois=50000,
         quota_utilisateurs=50,
         quota_investigations_actives=2000,
-        profondeur_pivot_max=4,
+        profondeur_pivot_max=10,
         fonctionnalites=[
             MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
-            API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS,
+            API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,
             *RECHERCHES_SPECIALISEES,
         ],
         # 0 = pas de limite : les investigations complexes de ce palier peuvent
         # partir d'autant d'éléments que nécessaire.
-        max_points_depart=0,
+        max_points_depart=SANS_LIMITE,
+        max_sites_analyses=SANS_LIMITE,
     ),
 ]
 

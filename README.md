@@ -55,24 +55,38 @@ Deux garde-fous limitent les faux positifs :
 | | Gratuit | Starter | Pro | Entreprise |
 |---|---|---|---|---|
 | Prix mensuel | 0 € | 29 € | 99 € | 299 € |
-| Recherches / mois | 5 | 50 | 300 | 2000 |
+| **Recherches / mois** | 15 | 100 | 500 | 2500 |
+| **Rebonds (profondeur de pivot)** | ❌ | 2 | 5 | 10 |
+| **Sites analysés par recherche** | 200 | 1000 | tous | tous |
 | Enrichissements / mois | — | 500 | 5000 | 50 000 |
 | Utilisateurs | 1 | 3 | 10 | 50 |
+| Recherche par pseudonyme | ✅ | ✅ | ✅ | ✅ |
+| Recherche par e-mail | ✅ | ✅ | ✅ | ✅ |
+| Recherche par téléphone, adresse, compte | ❌ | ✅ | ✅ | ✅ |
+| **Résultats de sites sensibles** | ❌ | ✅ | ✅ | ✅ |
 | Modules par site | ❌ | ✅ | ✅ | ✅ |
-| Recherche par e-mail, téléphone, adresse, compte | ❌ | ✅ | ✅ | ✅ |
 | Éléments de départ par investigation | 1 | 2 | 5 | illimité |
 | Pivot | ❌ | supervisé | automatique | automatique |
-| Profondeur de pivot | 0 | 1 | 3 | 4 |
 | Export CSV / PDF | ❌ | CSV | CSV + PDF | CSV + PDF |
 
-Le palier gratuit donne accès à la recherche et à la corrélation de base. Les modules
-d'enrichissement et le pivot — le vrai différenciateur du produit — sont réservés aux
-plans payants. Ces restrictions sont appliquées **côté serveur** (endpoints *et* tâches
-de fond), jamais seulement par masquage d'un bouton.
+Le palier gratuit sert la **découverte** : il permet de juger la qualité de la
+corrélation sur les deux points de départ les plus courants — un pseudonyme et une
+adresse électronique — sans ouvrir ce qui fait la valeur du produit. Trois curseurs
+portent la montée en gamme, tous liés au coût réel d'infrastructure : le volume mensuel,
+la profondeur de rebond (chaque niveau multiplie les requêtes sortantes) et le nombre de
+sites analysés (environ 0,25 s par site).
+
+Les **sites sensibles** (pornographie) sont exclus du palier gratuit : c'est une limite
+commerciale, mais aussi une précaution, ce type de compte étant la donnée la plus
+sensible qu'une investigation puisse révéler. Voir
+[`backend/app/moteur/sites_sensibles.py`](backend/app/moteur/sites_sensibles.py).
+
+Ces restrictions sont appliquées **côté serveur** (endpoints *et* tâches de fond),
+jamais seulement par masquage d'un bouton.
 
 Les quotas se modifient directement en base, sans toucher au code : voir
 [`backend/app/facturation/plans.py`](backend/app/facturation/plans.py) pour les valeurs
-initiales.
+initiales, appliquées par `python -m app.scripts.initialiser_plans`.
 
 ---
 

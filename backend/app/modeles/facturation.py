@@ -49,6 +49,9 @@ class Plan(Base, HorodatageMixin):
     profondeur_pivot_max: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Nombre de points de départ acceptés dans une même investigation. 0 = illimité.
     max_points_depart: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Nombre maximal de sites analysables par recherche large. 0 = illimité, ce qui
+    # correspond à la « recherche maximale » vendue à partir du palier Pro.
+    max_sites_analyses: Mapped[int] = mapped_column(Integer, default=200, nullable=False)
 
     # --- Fonctionnalités activées ---
     # Liste de codes : ["modules", "pivot", "pivot_automatique", "export_pdf", "api", "retention_etendue"]

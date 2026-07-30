@@ -63,7 +63,12 @@ correlation:
 pivot:
   # PLAFOND DUR : aucune organisation, quel que soit son plan, ne peut le dépasser.
   # Protège l'infrastructure d'une explosion combinatoire de requêtes.
-  profondeur_plafond_serveur: 4
+  # Aligné sur le palier Entreprise (10 rebonds) : une valeur inférieure écraserait
+  # silencieusement ce que le plan annonce vendre. C'est
+  # `max_recherches_par_investigation` ci-dessous qui contient réellement le coût,
+  # et non la profondeur : à profondeur 10, le nombre de recherches est atteint bien
+  # avant le dernier niveau.
+  profondeur_plafond_serveur: 10
   profondeur_defaut: 1
 
   # Nombre maximal de nouvelles recherches déclenchées par pivot pour une investigation

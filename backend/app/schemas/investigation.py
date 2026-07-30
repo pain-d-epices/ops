@@ -42,6 +42,10 @@ class TypesRechercheSortie(BaseModel):
     types: list[TypeRechercheSortie]
     #: nombre d'éléments de départ acceptés, pseudonyme compris ; 0 = illimité
     max_points_depart: int
+    #: nombre de sites analysables par recherche large ; 0 = sans limite
+    max_sites_analyses: int = 0
+    #: nom du palier actif, pour l'expliquer dans le formulaire sans second appel
+    nom_plan: str = ""
 
 
 class DemandeInvestigation(BaseModel):
