@@ -53,34 +53,58 @@ const CANEVAS = 24;
  */
 const RASTER = 128;
 
-/** Épaisseur de trait visée, dans les unités du canevas. */
-const EPAISSEUR_TRAIT = 2;
+/**
+ * Épaisseur de trait par défaut, dans les unités du canevas de 24.
+ *
+ * Le trait est mis à l'échelle **avec** le dessin : son rapport à l'icône reste donc
+ * constant d'un type à l'autre, ce qui est le seul rapport qui compte à l'œil. Le
+ * compenser pour obtenir une épaisseur constante par rapport au *nœud* — ce qui a été
+ * tenté — produit l'inverse : les nœuds allant de 34 à 78 px pour des icônes toutes à
+ * 26 px, le trait du chevron finissait 2,3 fois plus épais que celui du rectangle
+ * arrondi.
+ *
+ * 1,7 plutôt que les 2 d'origine : à la taille où ces pictogrammes s'affichent
+ * réellement dans le graphe, 2 empâte les tracés qui se replient sur eux-mêmes.
+ */
+const EPAISSEUR_TRAIT = 1.7;
 
 /**
- * Encre réellement occupée par chaque pictogramme dans son carré de 24, contour et
- * terminaisons arrondies compris, et centre de cette encre.
+ * Boîte de la **géométrie** de chaque pictogramme dans son carré de 24, contour
+ * exclu, et centre de cette boîte.
  *
- * Obtenu en **rastérisant** chaque tracé à 480 px (20 px par unité) et en relevant
- * la boîte des pixels non transparents : c'est la seule mesure fidèle à ce que le
- * navigateur dessinera. `getBBox()` ne conviendrait pas, car il rend la boîte de la
- * géométrie sans le contour ni les terminaisons.
+ * Le contour est exclu volontairement : il rend ces valeurs indépendantes de
+ * l'épaisseur de trait choisie, qui peut donc être ajustée sans tout remesurer.
+ * L'encre visible vaut `géométrie + épaisseur` (terminaisons et jointures arrondies
+ * dépassent d'exactement une demi-épaisseur de chaque côté).
  *
- * Plusieurs pictogrammes ne sont pas centrés dans leur carré (la double silhouette
- * est à 10,97 au lieu de 12) : c'est corrigé par construction ci-dessous.
+ * Mesuré via `getBBox()` sur les tracés ci-dessous, recoupé par rastérisation à
+ * 480 px. Plusieurs pictogrammes ne sont pas centrés dans leur carré (la double
+ * silhouette est à 10,96 au lieu de 12) : corrigé par construction plus bas.
  *
- * À remesurer si un tracé est modifié — un pictogramme dont l'encre est mal
- * déclarée sera mal dimensionné.
+ * À remesurer si un tracé est modifié.
  */
-const ENCRE: Record<string, { cote: number; cx: number; cy: number }> = {
-  pseudo: { cote: 19, cx: 12, cy: 12.5 },
-  pseudo_alt: { cote: 19.95, cx: 10.97, cy: 12.4 },
-  email: { cote: 21, cx: 12, cy: 12 },
-  nom: { cote: 22, cx: 12, cy: 12 },
-  localisation: { cote: 20, cx: 12, cy: 12 },
-  lien: { cote: 22, cx: 12, cy: 12 },
-  telephone: { cote: 19.05, cx: 12.47, cy: 11.53 },
-  entreprise: { cote: 20, cx: 12, cy: 12 },
-  avatar: { cote: 20, cx: 12, cy: 12 },
+const GEOMETRIE: Record<string, { cote: number; cx: number; cy: number }> = {
+  pseudo: { cote: 17, cx: 12, cy: 12.5 },
+  pseudo_alt: { cote: 17.93, cx: 10.96, cy: 12.4 },
+  email: { cote: 19, cx: 12, cy: 12 },
+  nom: { cote: 20, cx: 12, cy: 12 },
+  localisation: { cote: 18, cx: 12, cy: 12 },
+  lien: { cote: 19.94, cx: 12, cy: 12 },
+  telephone: { cote: 17.01, cx: 12.49, cy: 11.51 },
+  entreprise: { cote: 18, cx: 12, cy: 12 },
+  avatar: { cote: 18, cx: 12, cy: 12 },
+};
+
+/**
+ * Épaisseur propre à certains pictogrammes, quand le tracé par défaut les empâte.
+ *
+ * « lien » est le cas le plus net : deux maillons qui s'entrelacent, donc des courbes
+ * qui se replient sur elles-mêmes à faible distance. Un trait plus fin y rend le
+ * dessin lisible là où l'épaisseur commune le referme.
+ */
+const EPAISSEUR_PAR_TYPE: Record<string, number> = {
+  lien: 1.35,
+  pseudo_alt: 1.55, // deux silhouettes qui se chevauchent, même raison en plus léger
 };
 
 /**
@@ -156,38 +180,37 @@ const TRACES: Record<string, string> = {
 const arr = (valeur: number) => Number(valeur.toFixed(4));
 
 /**
- * Fabrique une icône dont l'encre occupe `cible.cote` du nœud et dont le centre est
- * décalé de `cible.dx`/`cible.dy` (fractions de la taille du nœud).
+ * Fabrique une icône dont l'encre occupe `cible.cote` du nœud, centrée sur le centre
+ * visuel de la forme (décalage `cible.dx`/`cible.dy`, en fractions du nœud).
  *
- * L'épaisseur de trait est divisée par l'échelle appliquée, de sorte que toutes les
- * icônes conservent le même poids de trait à l'écran quelle que soit leur taille —
- * sans quoi l'icône du chevron (33 %) aurait un trait deux fois plus fin que celle
- * du rectangle arrondi (94 %).
+ * Le trait n'est **pas** compensé : il est mis à l'échelle avec le dessin, donc son
+ * rapport à l'icône reste celui voulu à l'écriture du pictogramme, pour tous les
+ * types. C'est ce rapport qui se voit, et non l'épaisseur absolue.
  */
 function construire(
   traces: string,
-  encre: { cote: number; cx: number; cy: number },
+  geometrie: { cote: number; cx: number; cy: number },
   cible: { cote: number; dx: number; dy: number },
   couleur: string,
+  trait: number,
 ): string {
-  // L'encre visible vaut « géométrie mise à l'échelle + une épaisseur de trait »,
-  // le trait n'étant justement pas mis à l'échelle (voir plus haut). L'échelle se
-  // déduit donc en retirant le trait des deux côtés de l'égalité, sans quoi les
-  // icônes les plus réduites dépassent leur cible de plusieurs points — mesuré :
-  // le chevron sortait à 39 % du nœud au lieu des 33 % voulus.
-  const encreUtile = encre.cote - EPAISSEUR_TRAIT;
-  const cibleUtile = CANEVAS * cible.cote - EPAISSEUR_TRAIT;
-  const echelle = cibleUtile / encreUtile;
-  const tx = CANEVAS / 2 + CANEVAS * cible.dx - echelle * encre.cx;
-  const ty = CANEVAS / 2 + CANEVAS * cible.dy - echelle * encre.cy;
+  // L'encre visible vaut « géométrie + une épaisseur de trait », terminaisons et
+  // jointures arrondies dépassant d'une demi-épaisseur de chaque côté. Comme le trait
+  // suit l'échelle, il suffit de dimensionner ce total sur la cible.
+  const echelle = (CANEVAS * cible.cote) / (geometrie.cote + trait);
+  const tx = CANEVAS / 2 + CANEVAS * cible.dx - echelle * geometrie.cx;
+  const ty = CANEVAS / 2 + CANEVAS * cible.dy - echelle * geometrie.cy;
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${RASTER}" height="${RASTER}" ` +
     `viewBox="0 0 ${CANEVAS} ${CANEVAS}">` +
     `<g transform="translate(${arr(tx)} ${arr(ty)}) scale(${arr(echelle)})" ` +
-    `fill="none" stroke="${couleur}" stroke-width="${arr(EPAISSEUR_TRAIT / echelle)}" ` +
+    `fill="none" stroke="${couleur}" stroke-width="${arr(trait)}" ` +
     `stroke-linecap="round" stroke-linejoin="round">${traces}</g></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
+
+/** Épaisseur retenue pour un pictogramme donné. */
+const traitDe = (type: string) => EPAISSEUR_PAR_TYPE[type] ?? EPAISSEUR_TRAIT;
 
 /**
  * Icône d'un type de nœud, ajustée à la forme qu'il porte dans le graphe.
@@ -201,9 +224,15 @@ export function iconePourForme(
   couleur = "#ffffff",
 ): string | null {
   const traces = TRACES[type];
-  const encre = ENCRE[type];
-  if (!traces || !encre) return null;
-  return construire(traces, encre, CARRE_INSCRIT[forme] ?? CARRE_PAR_DEFAUT, couleur);
+  const geometrie = GEOMETRIE[type];
+  if (!traces || !geometrie) return null;
+  return construire(
+    traces,
+    geometrie,
+    CARRE_INSCRIT[forme] ?? CARRE_PAR_DEFAUT,
+    couleur,
+    traitDe(type),
+  );
 }
 
 /** Fraction du nœud utilisable par une image, pour une forme donnée. */
@@ -218,7 +247,13 @@ export function coteUtile(forme: string): number {
 export const ICONES_TYPE: Partial<Record<TypeNoeud, string>> = Object.fromEntries(
   Object.keys(TRACES).map((type) => [
     type,
-    construire(TRACES[type], ENCRE[type], { cote: 0.92, dx: 0, dy: 0 }, "#ffffff"),
+    construire(
+      TRACES[type],
+      GEOMETRIE[type],
+      { cote: 0.92, dx: 0, dy: 0 },
+      "#ffffff",
+      traitDe(type),
+    ),
   ]),
 ) as Partial<Record<TypeNoeud, string>>;
 
