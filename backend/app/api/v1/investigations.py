@@ -86,9 +86,10 @@ def _enregistrer_points_depart(
 ) -> None:
     """Enregistre les points de départ, en vérifiant droits et limites du plan.
 
-    Le pseudonyme principal en est toujours un ; les éléments supplémentaires sont
-    validés un par un — un type non couvert par le plan est refusé explicitement,
-    plutôt qu'ignoré en silence.
+    L'élément principal (`demande.pseudo`) n'est plus obligatoirement un pseudonyme :
+    son type est déclaré explicitement par l'interface ou, à défaut, deviné, puis
+    validé par le même chercheur que les éléments supplémentaires — un type non
+    couvert par le plan est refusé explicitement, plutôt qu'ignoré en silence.
     """
     from app.moteur.chercheurs.base import detecter_type
     from app.moteur.chercheurs.registre import chercheur_pour
@@ -96,33 +97,55 @@ def _enregistrer_points_depart(
     from app.services.points_depart import chercheur_autorise
 
     session = ctx.session
+    deja_vus: set[str] = set()
 
-    # Le pseudonyme saisi est toujours le premier point de départ
+    valeur_principale = demande.pseudo.strip()
+    type_principal = demande.type_principal or detecter_type(valeur_principale)
+    chercheur_principal = chercheur_pour(type_principal)
+    if chercheur_principal is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"Le type « {type_principal} » n'est pas encore pris en charge "
+            f"(valeur : {valeur_principale[:60]}).",
+        )
+
+    autorise, motif = chercheur_autorise(type_principal, ctx.plan)
+    if not autorise:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, motif or "Type de recherche non autorisé.")
+
+    valeur_principale_valide = chercheur_principal.valider(valeur_principale)
+    if valeur_principale_valide is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"« {valeur_principale[:60]} » n'est pas un(e) "
+            f"{chercheur_principal.libelle.lower()} valide.",
+        )
+
     session.add(
         PointDepart(
             investigation_id=investigation.id,
             organisation_id=ctx.organisation_id,
-            type=TypePointDepart.PSEUDO.value,
-            valeur=demande.pseudo.strip()[:500],
-            valeur_normalisee=normaliser(demande.pseudo)[:500],
+            type=type_principal,
+            valeur=valeur_principale_valide[:500],
+            valeur_normalisee=normaliser(valeur_principale_valide)[:500] or valeur_principale_valide[:500],
         )
     )
+    deja_vus.add(f"{type_principal}:{valeur_principale_valide.lower()}")
 
     if not demande.points_depart:
         session.flush()
         return
 
-    # `max_points_depart` compte le pseudonyme principal ; 0 signifie illimité.
+    # `max_points_depart` compte l'élément principal ; 0 signifie illimité.
     maximum = ctx.plan.max_points_depart
     if maximum and len(demande.points_depart) + 1 > maximum:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             f"Le plan {ctx.plan.nom_affiche} accepte {maximum} élément(s) de départ "
-            f"par investigation, pseudonyme compris. Passez à un palier supérieur "
-            f"pour en combiner davantage.",
+            f"par investigation, élément principal compris. Passez à un palier "
+            f"supérieur pour en combiner davantage.",
         )
 
-    deja_vus: set[str] = set()
     for entree in demande.points_depart:
         valeur = entree.valeur.strip()
         if not valeur:

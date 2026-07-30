@@ -301,3 +301,62 @@ def test_types_recherche_ne_masque_pas_la_route_de_detail():
     """« types-recherche » ne doit pas être pris pour un identifiant d'investigation."""
     client, _ = _client("types_route@test.fr")
     assert client.get("/api/v1/investigations/identifiant-inexistant").status_code == 404
+
+
+# --- Type de l'élément principal, choisi explicitement ----------------------
+
+
+def test_element_principal_peut_etre_dun_autre_type_que_pseudo():
+    session = FabriqueSession()
+    try:
+        client, organisation_id = _client("principal_email@test.fr")
+        passer_au_plan(session, organisation_id, "pro")
+
+        reponse = client.post(
+            "/api/v1/investigations",
+            json={"pseudo": "jean.martin@exemple.fr", "type_principal": "email"},
+        )
+        assert reponse.status_code == 201, reponse.text
+        points = reponse.json()["points_depart"]
+        assert len(points) == 1
+        assert points[0]["type"] == "email"
+        assert points[0]["valeur"] == "jean.martin@exemple.fr"
+    finally:
+        session.close()
+
+
+def test_element_principal_devine_le_type_si_omis():
+    """Sans `type_principal`, le comportement historique est conservé : la valeur
+    est traitée comme un pseudonyme."""
+    client, _ = _client("principal_devine@test.fr")
+    reponse = client.post("/api/v1/investigations", json={"pseudo": "jeanmartin"})
+    assert reponse.status_code == 201, reponse.text
+    assert reponse.json()["points_depart"][0]["type"] == "pseudo"
+
+
+def test_element_principal_refuse_si_le_plan_ne_couvre_pas_le_type():
+    """Le palier gratuit ne peut démarrer que d'un pseudonyme : choisir un autre
+    type pour l'élément principal doit être refusé, pas seulement pour les
+    éléments supplémentaires."""
+    client, _ = _client("principal_gratuit@test.fr")
+    reponse = client.post(
+        "/api/v1/investigations",
+        json={"pseudo": "+33612345678", "type_principal": "telephone"},
+    )
+    assert reponse.status_code == 403
+    assert "plan" in reponse.json()["detail"].lower()
+
+
+def test_element_principal_valeur_invalide_pour_le_type_choisi():
+    session = FabriqueSession()
+    try:
+        client, organisation_id = _client("principal_invalide@test.fr")
+        passer_au_plan(session, organisation_id, "pro")
+
+        reponse = client.post(
+            "/api/v1/investigations",
+            json={"pseudo": "ceci-nest-pas-un-numero", "type_principal": "telephone"},
+        )
+        assert reponse.status_code == 422
+    finally:
+        session.close()

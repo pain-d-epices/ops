@@ -11,6 +11,7 @@ import {
 } from "../api/hooks";
 import type { ModePivot } from "../api/types";
 import {
+  LignePointDepartChamp,
   problemeLigne,
   SaisiePointsDepart,
   typeEffectif,
@@ -56,7 +57,11 @@ function FormulaireInvestigation() {
   const { data: typesRecherche } = useTypesRecherche();
   const creer = useCreerInvestigation();
 
-  const [pseudo, setPseudo] = useState("");
+  const [pointPrincipal, setPointPrincipal] = useState<LignePointDepart>({
+    cle: 0,
+    valeur: "",
+    type: null,
+  });
   const [pointsDepart, setPointsDepart] = useState<LignePointDepart[]>([]);
   const [variantes, setVariantes] = useState("");
   const [titre, setTitre] = useState("");
@@ -76,9 +81,12 @@ function FormulaireInvestigation() {
   const quotaEpuise = quotaRecherches?.restant === 0;
 
   const typesDisponibles = typesRecherche?.types ?? [];
+  const typePrincipalEffectif = typeEffectif(pointPrincipal);
   // Une ligne en défaut (type non couvert par le plan, ou non pris en charge) bloque
   // l'envoi : mieux vaut le dire tout de suite que faire échouer la requête.
-  const lignesEnDefaut = pointsDepart.some((l) => problemeLigne(l, typesDisponibles));
+  const problemePrincipal = problemeLigne(pointPrincipal, typesDisponibles);
+  const lignesEnDefaut =
+    Boolean(problemePrincipal) || pointsDepart.some((l) => problemeLigne(l, typesDisponibles));
 
   const soumettre = async (evenement: FormEvent) => {
     evenement.preventDefault();
@@ -86,7 +94,8 @@ function FormulaireInvestigation() {
 
     try {
       const investigation = await creer.mutateAsync({
-        pseudo: pseudo.trim(),
+        pseudo: pointPrincipal.valeur.trim(),
+        type_principal: typePrincipalEffectif,
         points_depart: pointsDepart
           .filter((ligne) => ligne.valeur.trim())
           .map((ligne) => ({
@@ -147,20 +156,31 @@ function FormulaireInvestigation() {
       )}
 
       <div className="champ">
-        <label htmlFor="pseudo">Pseudonyme à rechercher</label>
-        <input
-          id="pseudo"
-          value={pseudo}
-          onChange={(e) => setPseudo(e.target.value)}
-          placeholder="ex. jeanmartin"
-          className="mono"
-          required
-          minLength={2}
-          autoFocus
-        />
+        <label>Élément de départ</label>
+        {typesRecherche ? (
+          <LignePointDepartChamp
+            ligne={pointPrincipal}
+            types={typesDisponibles}
+            onChangement={(champs) => setPointPrincipal((p) => ({ ...p, ...champs }))}
+            placeholderVide="pseudonyme, adresse électronique, téléphone, compte…"
+            autoFocus
+          />
+        ) : (
+          <input disabled placeholder="Chargement…" />
+        )}
         <div className="aide">
-          Recherche sur {formaterNombre(nombreSites)} sites — {dureeEstimee(nombreSites)}.
-          Vous pouvez quitter la page, le traitement continue.
+          {typePrincipalEffectif === "pseudo" ? (
+            <>
+              Recherche sur {formaterNombre(nombreSites)} sites — {dureeEstimee(nombreSites)}.
+              Vous pouvez quitter la page, le traitement continue.
+            </>
+          ) : (
+            <>
+              La recherche est adaptée au type choisi. Si un pseudonyme en est déduit
+              (adresse électronique, compte…), la recherche large sur{" "}
+              {formaterNombre(nombreSites)} sites est aussi lancée automatiquement.
+            </>
+          )}
         </div>
       </div>
 
@@ -296,7 +316,7 @@ function FormulaireInvestigation() {
         type="submit"
         className="bouton-principal"
         style={{ width: "100%" }}
-        disabled={creer.isPending || !pseudo.trim() || quotaEpuise || lignesEnDefaut}
+        disabled={creer.isPending || !pointPrincipal.valeur.trim() || quotaEpuise || lignesEnDefaut}
       >
         {creer.isPending ? <span className="chargement" /> : "Lancer la recherche"}
       </button>

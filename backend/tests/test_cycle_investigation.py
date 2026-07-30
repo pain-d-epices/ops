@@ -411,3 +411,97 @@ def test_graphe_deduplique_les_informations_communes(runner_factice):
         assert aretes_apres >= 5                  # 3 comptes + 2 arêtes vers l'email
     finally:
         session.close()
+
+
+# --- Élément de départ principal de type quelconque -------------------------
+
+
+def test_lancer_investigation_relance_maigret_sur_pseudonyme_decouvert(runner_factice):
+    """Démarrer d'un compte (et non d'un pseudonyme) doit tout de même déclencher la
+    recherche large, à partir du pseudonyme extrait de l'adresse fournie."""
+    from app.modeles.investigation import PointDepart
+    from app.taches.recherche import lancer_investigation
+
+    client = TestClient(app)
+    reponse = creer_compte(client, "compte_pivot@test.fr", nom_organisation="Org compte pivot")
+    organisation_id = reponse["organisation_active"]
+    session = FabriqueSession()
+    try:
+        passer_au_plan(session, organisation_id, "pro")
+    finally:
+        session.close()
+
+    creation = client.post(
+        "/api/v1/investigations",
+        json={"pseudo": "https://github.com/jeanmartin", "type_principal": "compte"},
+    )
+    assert creation.status_code == 201, creation.text
+    investigation_id = creation.json()["id"]
+
+    resultat = lancer_investigation(investigation_id)
+    assert resultat["pseudos_decouverts"] == ["jeanmartin"]
+
+    session = FabriqueSession()
+    try:
+        investigation = session.get(Investigation, investigation_id)
+        noms_sites = {
+            p.site_nom
+            for p in session.query(ProfilIdentite).filter(
+                ProfilIdentite.investigation_id == investigation_id
+            )
+        }
+        assert "GitHub" in noms_sites      # le compte fourni par l'analyste
+        assert "Mastodon" in noms_sites    # trouvé par la recherche large déclenchée
+        assert investigation.nb_recherches_effectuees == 1
+
+        point_principal = (
+            session.query(PointDepart)
+            .filter(PointDepart.investigation_id == investigation_id)
+            .order_by(PointDepart.created_at)
+            .first()
+        )
+        assert point_principal.type == "compte"
+    finally:
+        session.close()
+
+
+def test_lancer_investigation_saute_la_recherche_large_sans_pseudonyme(runner_factice):
+    """Démarrer d'un compte sur un domaine générique ne permet d'extraire aucun
+    pseudonyme exploitable : Maigret ne doit pas être lancé sur une valeur qui n'en
+    est pas un."""
+    from app.taches.recherche import lancer_investigation
+
+    client = TestClient(app)
+    reponse = creer_compte(client, "compte_sans_pivot@test.fr", nom_organisation="Org sans pivot")
+    organisation_id = reponse["organisation_active"]
+    session = FabriqueSession()
+    try:
+        passer_au_plan(session, organisation_id, "pro")
+    finally:
+        session.close()
+
+    # "example.com" figure parmi les domaines génériques (DOMAINES_NON_PIVOTABLES,
+    # app.modules.base) : aucun pseudonyme n'en est extrait.
+    creation = client.post(
+        "/api/v1/investigations",
+        json={"pseudo": "https://example.com/jeanmartin", "type_principal": "compte"},
+    )
+    assert creation.status_code == 201, creation.text
+    investigation_id = creation.json()["id"]
+
+    resultat = lancer_investigation(investigation_id)
+    assert resultat["pseudos_decouverts"] == []
+
+    session = FabriqueSession()
+    try:
+        investigation = session.get(Investigation, investigation_id)
+        assert investigation.nb_recherches_effectuees == 0   # Maigret jamais lancé
+        profils = list(
+            session.query(ProfilIdentite).filter(
+                ProfilIdentite.investigation_id == investigation_id
+            )
+        )
+        assert len(profils) == 1                              # seulement le compte fourni
+        assert profils[0].site_domaine == "example.com"
+    finally:
+        session.close()

@@ -46,6 +46,10 @@ class TypesRechercheSortie(BaseModel):
 
 class DemandeInvestigation(BaseModel):
     pseudo: str = Field(min_length=2, max_length=200)
+    # Type de l'élément ci-dessus : pseudonyme par défaut, mais l'analyste peut
+    # démarrer d'une adresse électronique, d'un téléphone, d'un compte ou d'une
+    # adresse postale. Deviné si omis, comme pour les éléments complémentaires.
+    type_principal: str | None = None
     # Éléments complémentaires : adresse électronique, téléphone, compte, adresse.
     # Leur nombre est borné par le plan de l'organisation.
     points_depart: list[PointDepartEntree] = Field(default_factory=list, max_length=20)

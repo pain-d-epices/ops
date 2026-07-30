@@ -150,6 +150,8 @@ export interface InvestigationDetaillee extends InvestigationResumee {
 
 export interface DemandeInvestigation {
   pseudo: string;
+  /** Type de l'élément ci-dessus ; deviné côté serveur si omis. */
+  type_principal?: TypePointDepart | null;
   points_depart?: PointDepartEntree[];
   variantes?: string[];
   titre?: string | null;
