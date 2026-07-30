@@ -22,7 +22,7 @@ import fcose from "cytoscape-fcose";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Graphe, TypeNoeud } from "../../api/types";
-import { ICONES_TYPE, urlFavicon } from "./icones";
+import { coteUtile, ICONES_TYPE, iconePourForme, urlFavicon } from "./icones";
 
 cytoscape.use(fcose);
 
@@ -74,29 +74,6 @@ const FORMES_NOEUD: Record<TypeNoeud, FormeNoeud> = {
   entreprise: "barrel",
 };
 
-/**
- * Décalage du centre de l'icône par rapport au centre géométrique du nœud.
- *
- * Cytoscape centre l'image de fond sur le cadre (bounding box) de la forme, pas sur
- * son centre visuel — or plusieurs formes ne remplissent pas ce cadre symétriquement.
- * Calculé à partir des points de définition de chaque forme dans Cytoscape même
- * (`generatePolygon`) :
- *
- * - « tag » (pseudo_alt) : [-1,-1, 0.25,-1, 1,0, 0.25,1, -1,1] — le corps rectangulaire
- *   occupe la partie gauche du cadre, la pointe déporte le reste à droite. Centroïde
- *   réel à x ≈ -17 % du centre : l'icône doit être décalée vers la gauche.
- * - « vee » (lien) : [-1,-1, 0,-0.333, 1,-1, 0,1] — un chevron dont la base large est
- *   en haut et la pointe en bas. Centroïde réel à y ≈ -11 % du centre : l'icône doit
- *   être décalée vers le haut.
- *
- * Le rhomboïde (téléphone) est un parallélogramme, point-symétrique par construction :
- * son centroïde coïncide exactement avec le centre du cadre, aucun décalage requis.
- */
-const DECALAGE_ICONE: Partial<Record<TypeNoeud, { x?: string; y?: string }>> = {
-  pseudo_alt: { x: "42%" },
-  lien: { y: "45%" },
-};
-
 /** Couleur d'un compte selon son score : même code que les badges des tableaux. */
 function couleurScore(score: number): string {
   if (score >= 70) return "#3fb950";
@@ -104,12 +81,24 @@ function couleurScore(score: number): string {
   return "#8b949e";
 }
 
+/**
+ * Taille d'affichage visée pour les pictogrammes, en pixels.
+ *
+ * C'est le pictogramme, et non le nœud, qui porte l'information : il doit donc
+ * s'afficher à la même taille partout. Or les formes n'offrent pas la même place à
+ * une image — un chevron n'en laisse que 33 %, un rectangle arrondi 94 % (voir
+ * `CARRE_INSCRIT` dans icones.ts). À taille de nœud égale, l'icône du chevron
+ * ferait donc le tiers de celle du rectangle. La taille du nœud est par conséquent
+ * déduite de la place que sa forme laisse à l'icône, et non fixée à l'avance.
+ */
+const ICONE_VISEE = 26;
+const ICONE_VISEE_PSEUDO = 36; // le point de départ reste le plus gros nœud du graphe
+
 function tailleNoeud(type: TypeNoeud, score: number): number {
-  if (type === "pseudo") return 60;
   if (type === "compte") return 30 + (score / 100) * 24; // 30 à 54 px selon le score
-  // Les nœuds d'information portent un pictogramme : en dessous de cette taille,
-  // le dessin devient une tache indistincte.
-  return 42;
+  const visee = type === "pseudo" ? ICONE_VISEE_PSEUDO : ICONE_VISEE;
+  // Bornes de bon sens : un nœud ne doit ni disparaître ni écraser le graphe.
+  return Math.round(Math.min(80, Math.max(34, visee / coteUtile(FORMES_NOEUD[type]))));
 }
 
 /**
@@ -138,7 +127,15 @@ const STYLE_COMPTE_AVEC_FAVICON = {
   selector: "node[type='compte'][favicon]",
   style: {
     "background-image": "data(favicon)",
-    "background-fit": "contain",
+    // Le favicon est borné au carré inscrit dans l'ellipse (1/√2 du diamètre) et
+    // non ajusté au cadre : « contain » remplirait la boîte du nœud, donc
+    // dépasserait des bords de l'ellipse. Les favicons étant carrés par
+    // convention, imposer un carré ne les déforme pas.
+    "background-fit": "none",
+    "background-width": `${(coteUtile(FORMES_NOEUD.compte) * 100).toFixed(1)}%`,
+    "background-height": `${(coteUtile(FORMES_NOEUD.compte) * 100).toFixed(1)}%`,
+    "background-width-relative-to": "inner",
+    "background-height-relative-to": "inner",
     "background-color": "#f0f3f6",
     "background-image-crossorigin": "null",
     "border-width": 4,
@@ -218,21 +215,25 @@ export function GrapheInvestigation({
         // Une règle par type : ni la forme ni l'icône ne peuvent être pilotées par
         // `data()`, Cytoscape n'acceptant que des valeurs littérales ici.
         ...Object.entries(FORMES_NOEUD).map(([type, forme]) => {
-          const decalage = DECALAGE_ICONE[type as TypeNoeud];
+          const icone = iconePourForme(type as TypeNoeud, forme);
           return {
             selector: `node[type="${type}"]`,
             style: {
               shape: forme,
-              ...(ICONES_TYPE[type as TypeNoeud]
+              ...(icone
                 ? {
-                    "background-image": ICONES_TYPE[type as TypeNoeud] as string,
+                    "background-image": icone,
+                    // L'image couvre tout le nœud et n'est pas repositionnée :
+                    // l'échelle et le recentrage propres à la forme sont déjà
+                    // dans le SVG (voir icones.ts). Une consigne unique pour tous
+                    // les types, donc aucun pourcentage de position à régler.
                     "background-fit": "none" as const,
-                    // Le pictogramme occupe la majeure partie du nœud : plus petit,
-                    // il n'est plus identifiable une fois le graphe dézoomé.
-                    "background-width": "82%",
-                    "background-height": "82%",
-                    "background-position-x": decalage?.x ?? "50%",
-                    "background-position-y": decalage?.y ?? "50%",
+                    "background-width": "100%",
+                    "background-height": "100%",
+                    // Rapporté à la boîte du nœud seule : sans cela, un éventuel
+                    // `padding` décalerait silencieusement toutes les icônes.
+                    "background-width-relative-to": "inner" as const,
+                    "background-height-relative-to": "inner" as const,
                   }
                 : {}),
             },
