@@ -32,7 +32,7 @@ ayant consenti. Utile pour de la veille de marque, pas pour une investigation.
 
 | Plateforme | Voie légale | Coût | Verdict |
 |---|---|---|---|
-| **X / Twitter** | API officielle v2 | ~200 $/mois (palier Basic) | **Réaliste** pour un plan Entreprise. Fiable et sans risque juridique. |
+| **X / Twitter** | API officielle v2 | ~200 $/mois (palier Basic) | **Écarté** — outil payant, exclu par consigne du client quel que soit le rapport valeur/prix. |
 | **Discord** | API officielle avec jeton de bot | Gratuit | **Réaliste mais limité** — voir ci-dessous |
 | **Instagram** | API Graph (comptes Business uniquement) | Gratuit | Peu utile en investigation |
 | **TikTok** | API Research | Réservée aux chercheurs universitaires | Hors de portée |
@@ -82,10 +82,10 @@ Steam *(fait via XML)*, Twitch *(fait)*, Last.fm *(fait)*, Discord (jeton de bot
 YouTube (quota gratuit). Chacune demande une clé à configurer dans `.env` : à
 documenter clairement, puisque vous n'êtes pas développeur.
 
-### Vague C — X / Twitter via l'API officielle (effort moyen, coût réel)
+### Vague C — X / Twitter via l'API officielle : écarté
 
-~200 $/mois. À réserver aux plans Pro et Entreprise, avec répercussion du coût dans
-le prix. C'est la seule voie propre vers X.
+~200 $/mois, seule voie propre vers X. **Écarté définitivement** : le client refuse
+tout outil tiers payant, quel que soit le rapport valeur/prix.
 
 ### Ce que je recommande d'écarter
 
@@ -191,7 +191,7 @@ Maigret sur ce point.
 |---|---|---|---|
 | **Gravatar** — le hash MD5 de l'adresse donne accès à un profil public (nom, sites déclarés) | Totale | Bonne quand il existe | API publique |
 | **Partie locale comme pseudonyme** — `jean.martin@…` → recherche sur `jean.martin` | Totale | Bonne | *(déjà implémenté)* |
-| **Have I Been Pwned** — dans quelles fuites l'adresse apparaît | Totale, service payant officiel | Excellente | ~4 $/mois |
+| **Have I Been Pwned** — dans quelles fuites l'adresse apparaît | Totale, service payant officiel | Excellente | ~4 $/mois — **écarté**, outil payant |
 | **Vérification MX/SMTP** — l'adresse existe-t-elle ? | Légale | Moyenne (beaucoup de serveurs répondent toujours oui) | — |
 | **`user-scanner`** — présence/absence sur ~140 sites (e-mail) et ~220 (pseudo, avec liens) | Zone grise, comme tout test de formulaire de récupération | Bonne, gratuit, sans jeton ni quota | **MIT** — intégrable sans réserve |
 
@@ -245,8 +245,9 @@ que les modules d'enrichissement existants.
 | **Recherche par téléphone** | ❌ | ✅ | ✅ | ✅ |
 | **Recherche par adresse** | ❌ | ✅ | ✅ | ✅ |
 | **Points de départ multiples** | ❌ | 2 maximum | 5 | illimité |
-| Fuites de données (HIBP) | ❌ | ❌ | ✅ | ✅ |
-| Connecteur X / Twitter | ❌ | ❌ | ❌ | ✅ |
+
+Les fuites de données (HIBP) et le connecteur X/Twitter, envisagés pour les paliers
+Pro/Entreprise, sont écartés : outils payants, exclus par consigne du client.
 
 Ce qui reste échelonné par palier, et pourquoi : la **profondeur de rebond** et le
 **nombre de points de départ simultanés** restent les vrais leviers de coût
@@ -270,12 +271,13 @@ continue de se justifier, plutôt que sur l'accès aux types de recherche eux-m�
    sous-processus (même patron que Maigret)
 3. ✅ **Abstraction `Chercheur`** — prérequis technique de tout le reste
 4. ✅ **Points de départ multiples** — backend, API et interface
-5. ✅ **Chercheur e-mail** (Gravatar + partie locale + `user-scanner`) — HIBP reste à
-   décider (service payant, ~4 $/mois)
+5. ✅ **Chercheur e-mail** (Gravatar + partie locale + `user-scanner`) — HIBP écarté,
+   outil payant
 6. ✅ **Chercheur téléphone** (libphonenumber + `user-scanner`)
 7. ✅ **Chercheur adresse** (Nominatim + adresse.data.gouv.fr)
-8. **Discord et X** — connecteurs officiels, seule étape non encore commencée de
-   cette feuille de route, selon la demande client réelle
+8. **Discord** — connecteur officiel gratuit (jeton de bot), seule étape non encore
+   commencée de cette feuille de route, selon la demande client réelle. X/Twitter
+   écarté (voir ci-dessus).
 
 ---
 
@@ -288,6 +290,8 @@ continue de se justifier, plutôt que sur l'accès aux types de recherche eux-m�
    très élevé, mais nécessiterait soit d'accepter les obligations AGPL (publier le
    code de Searcher), soit un chantier de réimplémentation à part entière. À isoler
    comme décision distincte, pas pour cette feuille de route.
-3. **Abonnement X / Twitter à ~200 $/mois** : on l'intègre pour le palier Entreprise ?
-4. **Have I Been Pwned à ~4 $/mois** : à intégrer ? Le rapport valeur/prix est excellent.
-5. **Répartition par palier** mise à jour ci-dessus : à valider ou corriger.
+3. **Répartition par palier** mise à jour ci-dessus : à valider ou corriger.
+
+Tranché : X/Twitter (~200 $/mois) et Have I Been Pwned (~4 $/mois) sont écartés —
+consigne du client de n'utiliser aucun outil tiers payant, quel que soit le rapport
+valeur/prix.
