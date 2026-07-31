@@ -63,6 +63,11 @@ Cette mention doit apparaître dans les crédits de l'application (page « À pr
 | Pillow | MIT-CMU (HPND) | Traitement d'images |
 | email-validator | The Unlicense | Validation des adresses électroniques |
 | websockets | BSD-3-Clause | Transport WebSocket |
+| pyotp | MIT | Génération et vérification des codes TOTP (2FA) |
+| qrcode | BSD-3-Clause | QR code d'activation de la 2FA, généré localement |
+| cryptography | Apache-2.0 / BSD-3-Clause (au choix) | Chiffrement du secret TOTP en base |
+| stripe (SDK Python) | MIT | Client de l'API Stripe (paiement, portail, webhooks) |
+| reportlab | BSD-3-Clause | Génération des rapports PDF |
 
 ### Point d'attention : psycopg
 
@@ -128,7 +133,7 @@ d'utilisation s'appliquent aux appels effectués.
 | API Gitee | Enrichissement de profils | API v5 publique. **60 requêtes par heure** sans jeton. |
 | Profils XML Steam | Enrichissement de profils | Format `?xml=1` public, prévu par Valve, sans clé. |
 | Favicons DuckDuckGo | Logos des sites dans le graphe | Service public gratuit. Voir la note de confidentialité ci-dessous. |
-| API Gumroad | Vérification des licences d'abonnement | Nécessite un jeton vendeur. |
+| API Stripe | Paiement par abonnement, portail client, webhooks | Nécessite un compte Stripe. Merchant of record optionnel selon la configuration fiscale ; gère la TVA européenne via Stripe Tax. |
 
 ### Note de confidentialité sur les favicons
 

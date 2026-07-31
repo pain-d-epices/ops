@@ -194,8 +194,9 @@ dont la partie locale est « john », qui relance une recherche sur « john »�
 **Multi-tenant** : `organisations`, `utilisateurs`, `appartenances` (rôle par
 rattachement), `invitations`
 
-**Facturation** : `plans`, `abonnements` (licence Gumroad), `compteurs_usage`
-(un par organisation et par mois), `evenements_gumroad` (webhooks bruts, rejouables)
+**Facturation** : `plans`, `abonnements` (client et souscription Stripe),
+`compteurs_usage` (un par organisation et par mois), `evenements_stripe` (webhooks
+bruts, rejouables)
 
 **Investigation** : `investigations`, `executions_recherche` (une par appel Maigret,
 pivots compris, avec la sortie brute conservée), `profils_identite`,

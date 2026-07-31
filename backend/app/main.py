@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from app.config import parametres
 from app.facturation.garde import FonctionnaliteIndisponible
 from app.facturation.quotas import QuotaDepasse
+from app.securite.totp import TotpRequis
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,6 +87,18 @@ async def gerer_quota_depasse(requete: Request, exc: QuotaDepasse) -> JSONRespon
     )
 
 
+@app.exception_handler(TotpRequis)
+async def gerer_totp_requis(requete: Request, exc: TotpRequis) -> JSONResponse:
+    del requete, exc
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={
+            "detail": "Code de vérification à deux facteurs requis.",
+            "code": "totp_requis",
+        },
+    )
+
+
 @app.exception_handler(FonctionnaliteIndisponible)
 async def gerer_fonctionnalite_indisponible(
     requete: Request, exc: FonctionnaliteIndisponible
@@ -107,8 +120,8 @@ async def gerer_fonctionnalite_indisponible(
 from app.api.v1 import (  # noqa: E402 — importés après la création de l'application
     abonnement,
     auth,
+    facturation_stripe,
     graphe,
-    gumroad,
     investigations,
     organisations,
     pivots,
@@ -124,7 +137,7 @@ app.include_router(profils.routeur, prefix=PREFIXE)
 app.include_router(graphe.routeur, prefix=PREFIXE)
 app.include_router(pivots.routeur, prefix=PREFIXE)
 app.include_router(abonnement.routeur, prefix=PREFIXE)
-app.include_router(gumroad.routeur, prefix=PREFIXE)
+app.include_router(facturation_stripe.routeur, prefix=PREFIXE)
 app.include_router(ws.routeur)
 
 

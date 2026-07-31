@@ -28,6 +28,29 @@ class DemandeConnexion(BaseModel):
     email: EmailStr
     mot_de_passe: str
     organisation_id: str | None = None
+    # Fourni au second appel, une fois que le premier a répondu 401 avec
+    # code="totp_requis". Un code à 6 chiffres, ou l'un des codes de secours.
+    code_totp: str | None = None
+
+
+class DemandeActivationTotp(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+
+
+class DemandeDesactivationTotp(BaseModel):
+    mot_de_passe: str
+    code: str = Field(min_length=6, max_length=8)
+
+
+class ActivationTotpSortie(BaseModel):
+    secret: str
+    qr_code_base64: str
+    codes_secours: list[str]
+
+
+class EtatTotpSortie(BaseModel):
+    actif: bool
+    codes_secours_restants: int
 
 
 class DemandeAcceptationCgu(BaseModel):

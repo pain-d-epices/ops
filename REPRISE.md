@@ -4,6 +4,67 @@ Point d'étape au **31/07/2026**.
 
 ## État : application vérifiée de bout en bout
 
+### Export PDF, double authentification, migration Stripe (31/07/2026)
+
+Trois chantiers menés en parallèle suite à la décision de payer via **Stripe plutôt
+que Gumroad**.
+
+**Export PDF** (`app/services/export_pdf.py`, via `reportlab`, déjà présent en
+dépendance transitive de Maigret) — rapport présentable (tableau des profils, détail
+des données extraites par site, avertissement légal), réservé aux plans possédant
+`export_pdf`. Testé hors serveur avec des données contenant `<script>` et `&` : le
+texte est bien échappé, aucune injection de balise dans le PDF produit.
+
+**Double authentification (TOTP)** — activation en deux temps (générer un secret et
+des codes de secours via `/auth/2fa/activer`, confirmer avec un vrai code via
+`/auth/2fa/confirmer` : sans cette confirmation, une erreur de scan aurait verrouillé
+le compte). Le secret est chiffré en base avec Fernet (clé dérivée de `CLE_SECRETE`,
+voir `app/securite/totp.py`) — une fuite de la base seule ne suffit pas à cloner le
+second facteur. La connexion en deux appels : le premier renvoie 401/`totp_requis` si
+le compte a activé la 2FA, le second fournit le code. Page « Mon compte » ajoutée à la
+navigation pour gérer l'activation/désactivation.
+
+**Migration Gumroad → Stripe** — remplacement complet (aucune vente réelle n'avait
+encore eu lieu, la conversion de données existantes n'était donc pas nécessaire).
+Différences de fond avec Gumroad :
+- Stripe **pilote l'abonnement depuis l'application** (sessions Checkout et portail de
+  facturation créées par nos soins), alors que Gumroad ne faisait que notifier ;
+- le lien organisation ↔ client Stripe passe par une **métadonnée** posée à la
+  création de la session de paiement (`organisation_id`, `plan_code`), pas par une
+  recherche par email côté webhook — plus robuste ;
+- le webhook est **signé** (`Stripe-Signature` + secret d'endpoint), alors que Gumroad
+  ne proposait qu'un secret partagé en paramètre d'URL ;
+- `activer_abonnement`/`resilier_abonnements` ont déménagé de `services/gumroad.py`
+  vers `facturation/abonnements.py`, provider-neutre : le code métier (quotas,
+  garde-fous par plan) ne dépend plus du fournisseur de paiement.
+
+**Vérifié dans le navigateur le 31/07/2026**, avec le compte de test existant (plan
+Pro) : activation de la 2FA (secret et codes de secours affichés, QR code généré),
+confirmation avec un vrai code TOTP calculé côté navigateur, déconnexion puis
+reconnexion en deux temps (mot de passe → 401/`totp_requis` → mot de passe + code →
+200), désactivation avec mot de passe et code, export PDF téléchargé avec succès sur
+une investigation réelle (200, contenu `%PDF`). Bouton « Souscrire » de la page
+Abonnement cliqué sans clé Stripe configurée : erreur claire affichée (« Stripe n'est
+pas configuré sur ce serveur »), pas de plantage, reste de l'application inchangée.
+
+Deux migrations Alembic manquaient sur la base PostgreSQL locale après ce chantier
+(colonnes TOTP, puis renommage Gumroad → Stripe) : la connexion échouait en 500 tant
+qu'elles n'étaient pas appliquées. **Après un `git pull` incluant ce chantier**,
+`alembic upgrade head` puis `python -m app.scripts.initialiser_plans` sont
+indispensables avant de relancer l'API (déjà rappelé plus haut, mais particulièrement
+important cette fois : la connexion casse silencieusement en 500 sinon).
+
+**Non testé** : un vrai paiement Stripe Checkout de bout en bout, ni un vrai webhook
+signé — aucun compte Stripe n'existe encore (décision de l'utilisateur, à créer plus
+tard). La logique de traitement des webhooks (activation, résiliation, déduplication)
+est vérifiée par les tests automatisés, en contournant la vérification de signature.
+Avant la première vente : créer le compte Stripe, les prix, l'endpoint de webhook
+(voir « Facturation via Stripe » dans le [README](README.md)), puis faire un paiement
+de test avec `stripe listen --forward-to localhost:8000/api/v1/stripe/webhook`.
+
+172 tests automatisés au vert (154 avant ce chantier + 18 nouveaux : export PDF,
+TOTP, traitement des webhooks Stripe).
+
 ### Protection contre la création de comptes en série (31/07/2026)
 
 Le palier gratuit offrant 15 recherches par mois, rien n'empêchait jusqu'ici un
@@ -278,10 +339,10 @@ Interface sur http://localhost:5173
 `remi@cabinet-test.fr` / `PhraseDePasseLongue2026` — organisation « Cabinet de test »,
 plan Pro, rebond automatique sur 2 niveaux.
 
-Pour passer une autre organisation en plan payant sans passer par Gumroad :
+Pour passer une autre organisation en plan payant sans passer par Stripe :
 
 ```bash
-cd backend && .venv/Scripts/python -c "from app.db.session import portee_session; from app.modeles import Organisation, Plan; from app.services.gumroad import activer_abonnement; from sqlalchemy import select; s=portee_session().__enter__(); org=s.scalar(select(Organisation).where(Organisation.slug=='VOTRE-SLUG')); plan=s.scalar(select(Plan).where(Plan.code=='pro')); activer_abonnement(s, org, plan, cle_licence='TEST'); s.commit(); print('ok')"
+cd backend && .venv/Scripts/python -c "from app.db.session import portee_session; from app.modeles import Organisation, Plan; from app.facturation.abonnements import activer_abonnement; from sqlalchemy import select; s=portee_session().__enter__(); org=s.scalar(select(Organisation).where(Organisation.slug=='VOTRE-SLUG')); plan=s.scalar(select(Plan).where(Plan.code=='pro')); activer_abonnement(s, org, plan, stripe_customer_id='cus_test', stripe_subscription_id='sub_test'); s.commit(); print('ok')"
 ```
 
 ## Ce qui reste à faire
@@ -328,7 +389,8 @@ Si l'incident se reproduit, appliquer la même procédure.
 
 ## Rappel des décisions arrêtées
 
-- Paiement par **Gumroad** (clé de licence), pas Stripe
+- Paiement par **Stripe** (Checkout + portail client), pas Gumroad (abandonné le
+  31/07/2026, avant toute vente réelle)
 - Graphe stocké dans **PostgreSQL**, pas de Neo4j
 - Modules uniquement sur **APIs publiques** (GitHub, Reddit, Mastodon, GitLab,
   Hacker News, Keybase)

@@ -130,6 +130,8 @@ class ActionJournal(str, Enum):
     DECONNEXION = "auth.deconnexion"
     INSCRIPTION = "auth.inscription"
     CGU_ACCEPTEES = "auth.cgu_acceptees"
+    TOTP_ACTIVE = "auth.totp_active"
+    TOTP_DESACTIVE = "auth.totp_desactive"
     INVESTIGATION_CREEE = "investigation.creee"
     INVESTIGATION_SUPPRIMEE = "investigation.supprimee"
     ENRICHISSEMENT_LANCE = "enrichissement.lance"

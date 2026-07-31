@@ -132,12 +132,16 @@ def creer_compte(
 
 
 def passer_au_plan(session: Session, organisation_id: str, code_plan: str) -> None:
-    """Attribue un plan à une organisation, sans passer par Gumroad."""
-    from app.services.gumroad import activer_abonnement
+    """Attribue un plan à une organisation, sans passer par Stripe."""
+    from app.facturation.abonnements import activer_abonnement
 
     organisation = session.get(Organisation, organisation_id)
     plan = session.query(Plan).filter(Plan.code == code_plan).one()
-    activer_abonnement(session, organisation, plan, cle_licence=f"licence-test-{code_plan}")
+    activer_abonnement(
+        session, organisation, plan,
+        stripe_customer_id=f"cus_test_{code_plan}",
+        stripe_subscription_id=f"sub_test_{code_plan}",
+    )
     session.commit()
 
 

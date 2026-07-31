@@ -138,7 +138,8 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 
 - `CLE_SECRETE` : la valeur générée ci-dessus
 - `POSTGRES_MOT_DE_PASSE` : un mot de passe solide
-- `GUMROAD_WEBHOOK_SECRET` : un secret aléatoire de votre choix
+- `STRIPE_CLE_SECRETE` et `STRIPE_WEBHOOK_SECRET` : voir « Facturation via Stripe »
+  ci-dessous (facultatif pour un premier lancement en local, sans paiement réel)
 
 Puis lancez l'ensemble :
 
@@ -355,25 +356,38 @@ un script d'amorçage, à ne pas laisser en production.
 
 ---
 
-## Facturation via Gumroad
+## Facturation via Stripe
 
-Gumroad est *merchant of record* : il encaisse et **gère la TVA européenne à votre
-place**, ce qui évite toute déclaration de TVA transfrontalière. En contrepartie, il
-prélève une commission (~10 %) et ne pilote pas les abonnements depuis l'application.
+Stripe pilote l'abonnement **depuis l'application** : c'est Searcher qui crée la
+session de paiement (Stripe Checkout) et la session de gestion (portail de
+facturation), Stripe se contentant de notifier les changements par webhook. Il gère
+la TVA européenne automatiquement (Stripe Tax).
 
 Mise en place :
 
-1. Créez un produit Gumroad par palier payant (Starter, Pro, Entreprise), en abonnement mensuel.
-2. Activez les **clés de licence** sur chaque produit.
-3. Renseignez la correspondance dans `.env` :
-   `GUMROAD_PRODUITS=id_produit_starter:starter,id_produit_pro:pro`
-4. Déclarez l'URL de webhook dans Gumroad :
-   `https://votre-domaine.fr/api/v1/gumroad/webhook?secret=VOTRE_SECRET`
+1. Créez un compte Stripe, puis un produit par palier payant (Starter, Pro,
+   Entreprise) avec un prix récurrent mensuel (Produits > Ajouter un produit).
+2. Renseignez la correspondance dans `.env` :
+   `STRIPE_PRIX=price_xxx:starter,price_yyy:pro,price_zzz:entreprise`
+   (ou directement dans la colonne `plans.stripe_price_id` en base — la colonne a
+   priorité si les deux sont renseignés).
+3. Créez un endpoint de webhook dans le tableau de bord Stripe (Développeurs >
+   Webhooks) pointant vers `https://votre-domaine.fr/api/v1/stripe/webhook`, abonné
+   au minimum à `checkout.session.completed`, `customer.subscription.updated` et
+   `customer.subscription.deleted`. Copiez le secret de signature généré dans
+   `STRIPE_WEBHOOK_SECRET`.
+4. Renseignez `STRIPE_CLE_SECRETE` (clé API secrète, Développeurs > Clés API).
 
-**Deux voies d'activation, volontairement redondantes** : le webhook, et la saisie
-manuelle de la clé de licence par le client (`POST /api/v1/abonnement/licence`). La
-seconde est indispensable — Gumroad ne réémet pas les webhooks en échec, et un client
-achète souvent avant d'avoir créé son compte.
+**En développement local**, sans clé Stripe configurée, les boutons « Souscrire » et
+« Ouvrir le portail de facturation » répondent une erreur claire (503) plutôt que de
+planter : le reste de l'application (recherche, corrélation, quotas gratuits) reste
+utilisable. Pour tester le paiement en local, le CLI Stripe (`stripe listen --forward-to
+localhost:8000/api/v1/stripe/webhook`) relaie les webhooks sans exposer la machine sur
+internet.
+
+L'abonnement ne s'active qu'à réception du webhook `checkout.session.completed`, une
+fois le paiement effectivement confirmé par Stripe — jamais à l'appel de
+`/abonnement/checkout`, qui ne fait que créer la session de paiement.
 
 ---
 
@@ -458,14 +472,16 @@ Parcours réellement exécuté le 29/07/2026, avec Maigret sur de vrais pseudony
 | Rebond automatique sur « soxoj » | variante `sox0j` détectée, explorée, puis arrêt propre |
 | Graphe | 31 nœuds, 34 arêtes, couleurs et tailles selon le score |
 | Explication du score dans l'interface | contribution détaillée de chaque règle |
-| Exports JSON et CSV | ✅ |
+| Exports JSON, CSV et PDF | ✅ |
 | Quotas et gating par plan | consommation exacte, options bornées selon le palier |
+| Double authentification (TOTP) | activation, connexion, codes de secours |
+| Paiement Stripe | Checkout, portail client, webhooks (voir « Facturation via Stripe ») |
 
 Restent à faire :
 
 - envoi des courriels d'invitation (le lien est pour l'instant affiché à l'écran) ;
-- export PDF du rapport (l'export JSON et CSV fonctionne) ;
-- 2FA (les champs sont déjà prévus en base) ;
+- créer le compte Stripe et ses prix en production (le code est prêt, voir
+  « Facturation via Stripe » ci-dessus) ;
 - **volet juridique avant commercialisation** : base légale, AIPD, contrat de
   sous-traitance client — voir [docs/rgpd.md](docs/rgpd.md).
 

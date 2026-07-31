@@ -1,7 +1,12 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 
 import { ErreurApi } from "../api/client";
-import { useAbonnement, useActiverLicence, usePlans } from "../api/hooks";
+import {
+  useAbonnement,
+  useDemarrerPaiement,
+  useOuvrirPortail,
+  usePlans,
+} from "../api/hooks";
 import type { Plan } from "../api/types";
 import { BarreProgression, Chargement, MessageErreur } from "../composants/ui";
 import { useAuth } from "../contexts/AuthContext";
@@ -20,13 +25,45 @@ const LIBELLES_QUOTA: Record<string, string> = {
 };
 
 export function PageAbonnement() {
+  const { organisation } = useAuth();
   const { data: abonnement, isLoading, error } = useAbonnement();
   const { data: plans } = usePlans();
+  const demarrerPaiement = useDemarrerPaiement();
+  const ouvrirPortail = useOuvrirPortail();
+  const [erreurPaiement, setErreurPaiement] = useState<string | null>(null);
+
+  const estAdmin = organisation?.role === "admin";
 
   if (isLoading) return <Chargement />;
   if (error || !abonnement) {
     return <MessageErreur>Impossible de charger les informations d'abonnement.</MessageErreur>;
   }
+
+  const souscrire = async (codePlan: string) => {
+    setErreurPaiement(null);
+    try {
+      const { url } = await demarrerPaiement.mutateAsync({ code_plan: codePlan });
+      // Redirection pleine page vers Stripe Checkout : le paiement se fait sur son
+      // domaine, jamais dans un cadre de notre interface.
+      window.location.href = url;
+    } catch (exception) {
+      setErreurPaiement(
+        exception instanceof ErreurApi ? exception.message : "Paiement impossible pour le moment.",
+      );
+    }
+  };
+
+  const gererAbonnement = async () => {
+    setErreurPaiement(null);
+    try {
+      const { url } = await ouvrirPortail.mutateAsync();
+      window.location.href = url;
+    } catch (exception) {
+      setErreurPaiement(
+        exception instanceof ErreurApi ? exception.message : "Portail indisponible pour le moment.",
+      );
+    }
+  };
 
   return (
     <div className="pile" style={{ gap: 24 }}>
@@ -35,16 +72,16 @@ export function PageAbonnement() {
         <p className="attenue">
           Plan actif : <strong>{abonnement.plan.nom_affiche}</strong>
           {abonnement.periode_fin && (
-            <> · renouvellement le {formaterDate(abonnement.periode_fin)}</>
-          )}
-          {abonnement.licence_active && (
-            <span className="badge badge-eleve" style={{ marginLeft: 10 }}>
-              licence active
-            </span>
+            <>
+              {" "}
+              · {abonnement.renouvellement_automatique ? "renouvellement" : "expiration"} le{" "}
+              {formaterDate(abonnement.periode_fin)}
+            </>
           )}
         </p>
       </div>
 
+      {erreurPaiement && <div className="message message-erreur">{erreurPaiement}</div>}
       {abonnement.message_limite && (
         <div className="message message-alerte">{abonnement.message_limite}</div>
       )}
@@ -73,7 +110,25 @@ export function PageAbonnement() {
         </div>
       </div>
 
-      <ActivationLicence />
+      {estAdmin && abonnement.stripe_lie && (
+        <div className="carte">
+          <div className="carte-titre">
+            <h2>Gérer mon abonnement</h2>
+          </div>
+          <p className="attenue" style={{ marginBottom: 14 }}>
+            Moyen de paiement, factures, changement de palier ou résiliation : tout se
+            passe sur le portail sécurisé de Stripe, notre prestataire de paiement.
+          </p>
+          <button
+            type="button"
+            className="bouton-principal"
+            onClick={gererAbonnement}
+            disabled={ouvrirPortail.isPending}
+          >
+            {ouvrirPortail.isPending ? <span className="chargement" /> : "Ouvrir le portail de facturation"}
+          </button>
+        </div>
+      )}
 
       <div>
         <div className="carte-titre">
@@ -81,21 +136,36 @@ export function PageAbonnement() {
         </div>
         <div className="grille-plans">
           {plans?.map((plan) => (
-            <CartePlan key={plan.code} plan={plan} />
+            <CartePlan
+              key={plan.code}
+              plan={plan}
+              estAdmin={estAdmin}
+              enCours={demarrerPaiement.isPending}
+              onSouscrire={() => souscrire(plan.code)}
+            />
           ))}
         </div>
       </div>
 
       <div className="message message-info">
-        Les paiements sont traités par Gumroad, qui gère la facturation et la TVA. Après
-        votre achat, saisissez la clé de licence reçue par courriel dans le formulaire
-        ci-dessus pour activer immédiatement votre plan.
+        Les paiements sont traités par Stripe, qui gère la facturation et la TVA.
+        L'abonnement s'active automatiquement dès la confirmation du paiement.
       </div>
     </div>
   );
 }
 
-function CartePlan({ plan }: { plan: Plan }) {
+function CartePlan({
+  plan,
+  estAdmin,
+  enCours,
+  onSouscrire,
+}: {
+  plan: Plan;
+  estAdmin: boolean;
+  enCours: boolean;
+  onSouscrire: () => void;
+}) {
   const fonctionnalitesConnues = [
     "modules",
     "pivot",
@@ -160,89 +230,17 @@ function CartePlan({ plan }: { plan: Plan }) {
 
       {plan.est_plan_actuel ? (
         <button type="button" disabled>Palier actuel</button>
-      ) : plan.url_achat ? (
-        <a
-          className="bouton bouton-principal"
-          href={plan.url_achat}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Souscrire sur Gumroad
-        </a>
       ) : plan.prix_mensuel_cents === 0 ? (
         <button type="button" disabled>Palier de découverte</button>
+      ) : estAdmin ? (
+        <button type="button" className="bouton-principal" onClick={onSouscrire} disabled={enCours}>
+          {enCours ? <span className="chargement" /> : "Souscrire"}
+        </button>
       ) : (
-        <button type="button" disabled title="Aucun produit Gumroad n'est configuré pour ce palier">
-          Bientôt disponible
+        <button type="button" disabled title="Seul un administrateur peut changer de palier">
+          Souscrire
         </button>
       )}
     </div>
-  );
-}
-
-function ActivationLicence() {
-  const { organisation } = useAuth();
-  const [cle, setCle] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [erreur, setErreur] = useState<string | null>(null);
-  const activer = useActiverLicence();
-
-  // Seul un administrateur peut modifier l'abonnement de l'organisation
-  if (organisation?.role !== "admin") return null;
-
-  const soumettre = async (evenement: FormEvent) => {
-    evenement.preventDefault();
-    setMessage(null);
-    setErreur(null);
-    try {
-      const resultat = await activer.mutateAsync({ cle_licence: cle.trim() });
-      setMessage(`Plan ${resultat.plan.nom_affiche} activé.`);
-      setCle("");
-    } catch (exception) {
-      setErreur(
-        exception instanceof ErreurApi
-          ? exception.message
-          : "Activation impossible pour le moment.",
-      );
-    }
-  };
-
-  return (
-    <form className="carte" onSubmit={soumettre}>
-      <div className="carte-titre">
-        <h2>Activer une clé de licence</h2>
-      </div>
-
-      {message && <div className="message message-succes" style={{ marginBottom: 14 }}>{message}</div>}
-      {erreur && <div className="message message-erreur" style={{ marginBottom: 14 }}>{erreur}</div>}
-
-      <div className="ligne enveloppe" style={{ gap: 10, alignItems: "flex-end" }}>
-        <div className="plein champ" style={{ marginBottom: 0 }}>
-          <label htmlFor="cle-licence">Clé reçue après votre achat Gumroad</label>
-          <input
-            id="cle-licence"
-            className="mono"
-            value={cle}
-            onChange={(e) => setCle(e.target.value)}
-            placeholder="XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX"
-            required
-            minLength={8}
-          />
-        </div>
-        <button
-          type="submit"
-          className="bouton-principal"
-          disabled={activer.isPending || cle.trim().length < 8}
-        >
-          {activer.isPending ? <span className="chargement" /> : "Activer"}
-        </button>
-      </div>
-
-      <div className="aide" style={{ marginTop: 10 }}>
-        L'activation est normalement automatique après l'achat. Ce formulaire sert de
-        secours si la notification de Gumroad ne nous est pas parvenue, ou si vous avez
-        acheté avant de créer votre compte.
-      </div>
-    </form>
   );
 }

@@ -23,9 +23,13 @@ from app.modeles.enums import ActionJournal, RoleMembre
 from app.modeles.organisation import Appartenance, Invitation, Organisation
 from app.modeles.utilisateur import JetonRafraichissement, Utilisateur
 from app.schemas.auth import (
+    ActivationTotpSortie,
     DemandeAcceptationCgu,
+    DemandeActivationTotp,
     DemandeConnexion,
+    DemandeDesactivationTotp,
     DemandeInscription,
+    EtatTotpSortie,
     OrganisationResumee,
     ReponseConnexion,
     UtilisateurSortie,
@@ -47,6 +51,16 @@ from app.securite.mots_de_passe import (
     hacher_jeton,
     valider_politique,
     verifier,
+)
+from app.securite.totp import (
+    TotpRequis,
+    chiffrer_secret,
+    code_valide,
+    dechiffrer_secret,
+    generer_codes_secours,
+    generer_secret,
+    qr_code_base64,
+    uri_provisionnement,
 )
 from app.services.journal import journaliser
 
@@ -140,6 +154,24 @@ def _utilisateur_sortie(session: Session, utilisateur: Utilisateur) -> Utilisate
         derniere_connexion=utilisateur.derniere_connexion,
         organisations=organisations,
     )
+
+
+def _verifier_totp(utilisateur: Utilisateur, code: str | None) -> bool:
+    """Valide un code TOTP, ou à défaut un code de secours (qui est alors consommé
+    sur l'objet ; l'appelant reste responsable du commit)."""
+    if not code:
+        return False
+    secret = dechiffrer_secret(utilisateur.totp_secret or "")
+    if secret and code_valide(secret, code):
+        return True
+
+    empreinte = hacher_jeton(code.strip())
+    if empreinte in (utilisateur.totp_codes_secours or []):
+        utilisateur.totp_codes_secours = [
+            c for c in utilisateur.totp_codes_secours if c != empreinte
+        ]
+        return True
+    return False
 
 
 def _verifier_plafond_creation(requete: Request, email: str, session: Session) -> None:
@@ -359,6 +391,28 @@ def connexion(
         session.commit()
         raise erreur_generique
 
+    if utilisateur.totp_actif:
+        if not _verifier_totp(utilisateur, demande.code_totp):
+            manque_code = not demande.code_totp
+            # Un code manquant n'est pas une tentative échouée (c'est le premier appel,
+            # celui qui déclenche l'affichage du champ de code côté client) : seul un
+            # code présent mais faux compte pour le verrou anti-force-brute.
+            if not manque_code:
+                utilisateur.tentatives_echouees += 1
+                if utilisateur.tentatives_echouees >= TENTATIVES_AVANT_BLOCAGE:
+                    utilisateur.bloque_jusqua = maintenant() + timedelta(minutes=DUREE_BLOCAGE_MINUTES)
+                    utilisateur.tentatives_echouees = 0
+            journaliser(
+                session, ActionJournal.CONNEXION_ECHOUEE,
+                utilisateur_id=utilisateur.id, email_utilisateur=email,
+                requete=requete, resultat="code de vérification à deux facteurs invalide",
+            )
+            session.commit()
+            if manque_code:
+                raise TotpRequis()
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Code de vérification incorrect.")
+        session.commit()  # persiste la consommation d'un éventuel code de secours
+
     utilisateur.tentatives_echouees = 0
     utilisateur.bloque_jusqua = None
     utilisateur.derniere_connexion = maintenant()
@@ -498,3 +552,104 @@ def accepter_cgu(
     ctx.session.commit()
     ctx.session.refresh(ctx.utilisateur)
     return _utilisateur_sortie(ctx.session, ctx.utilisateur)
+
+
+# --- Authentification à deux facteurs (TOTP) --------------------------------
+
+
+@routeur.get("/2fa", response_model=EtatTotpSortie)
+def etat_totp(utilisateur: Utilisateur = Depends(utilisateur_courant)) -> EtatTotpSortie:
+    return EtatTotpSortie(
+        actif=utilisateur.totp_actif,
+        codes_secours_restants=len(utilisateur.totp_codes_secours or []),
+    )
+
+
+@routeur.post("/2fa/activer", response_model=ActivationTotpSortie)
+def activer_totp(
+    ctx: ContexteRequete = Depends(contexte_courant),
+) -> ActivationTotpSortie:
+    """Démarre l'activation : génère un secret et des codes de secours, mais
+    n'active rien tant que `/2fa/confirmer` n'a pas vérifié un code réel.
+
+    Rappeler cette route avant confirmation régénère secret et codes, sans effet de
+    bord : rien n'était encore actif.
+    """
+    if ctx.utilisateur.totp_actif:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "La double authentification est déjà active. Désactivez-la avant d'en "
+            "reconfigurer une nouvelle.",
+        )
+
+    secret = generer_secret()
+    codes_secours = generer_codes_secours()
+
+    ctx.utilisateur.totp_secret = chiffrer_secret(secret)
+    ctx.utilisateur.totp_codes_secours = [hacher_jeton(c) for c in codes_secours]
+    ctx.session.commit()
+
+    return ActivationTotpSortie(
+        secret=secret,
+        qr_code_base64=qr_code_base64(uri_provisionnement(secret, ctx.utilisateur.email)),
+        codes_secours=codes_secours,
+    )
+
+
+@routeur.post("/2fa/confirmer", response_model=EtatTotpSortie)
+def confirmer_totp(
+    demande: DemandeActivationTotp,
+    requete: Request,
+    ctx: ContexteRequete = Depends(contexte_courant),
+) -> EtatTotpSortie:
+    """Confirme l'activation démarrée par `/2fa/activer` avec un code réellement
+    généré par l'application d'authentification."""
+    if ctx.utilisateur.totp_actif:
+        raise HTTPException(status.HTTP_409_CONFLICT, "La double authentification est déjà active.")
+
+    secret = dechiffrer_secret(ctx.utilisateur.totp_secret or "")
+    if not secret:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Aucune activation en cours. Appelez d'abord /auth/2fa/activer.",
+        )
+    if not code_valide(secret, demande.code):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Code incorrect. Vérifiez l'heure de votre appareil.")
+
+    ctx.utilisateur.totp_actif = True
+    journaliser(
+        ctx.session, ActionJournal.TOTP_ACTIVE,
+        organisation_id=ctx.organisation_id, utilisateur_id=ctx.utilisateur.id,
+        email_utilisateur=ctx.utilisateur.email, requete=requete,
+    )
+    ctx.session.commit()
+    return EtatTotpSortie(actif=True, codes_secours_restants=len(ctx.utilisateur.totp_codes_secours or []))
+
+
+@routeur.post("/2fa/desactiver", response_model=EtatTotpSortie)
+def desactiver_totp(
+    demande: DemandeDesactivationTotp,
+    requete: Request,
+    ctx: ContexteRequete = Depends(contexte_courant),
+) -> EtatTotpSortie:
+    """Désactive la double authentification.
+
+    Exige le mot de passe **et** un code valide : la 2FA protège justement contre
+    un mot de passe compromis seul, la désactiver ne doit pas être possible avec le
+    seul mot de passe si celui-ci a fuité.
+    """
+    if not verifier(demande.mot_de_passe, ctx.utilisateur.mot_de_passe_hash):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Mot de passe incorrect.")
+    if not ctx.utilisateur.totp_actif or not _verifier_totp(ctx.utilisateur, demande.code):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Code de vérification incorrect.")
+
+    ctx.utilisateur.totp_actif = False
+    ctx.utilisateur.totp_secret = None
+    ctx.utilisateur.totp_codes_secours = []
+    journaliser(
+        ctx.session, ActionJournal.TOTP_DESACTIVE,
+        organisation_id=ctx.organisation_id, utilisateur_id=ctx.utilisateur.id,
+        email_utilisateur=ctx.utilisateur.email, requete=requete,
+    )
+    ctx.session.commit()
+    return EtatTotpSortie(actif=False, codes_secours_restants=0)

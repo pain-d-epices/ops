@@ -17,7 +17,9 @@ import {
 import { appelerApi } from "./client";
 import type {
   Abonnement,
+  ActivationTotp,
   DemandeInvestigation,
+  EtatTotp,
   Graphe,
   Invitation,
   InvestigationDetaillee,
@@ -47,6 +49,7 @@ function options() {
 
 export const cles = {
   moi: ["moi"] as const,
+  totp: ["totp"] as const,
   organisation: () => ["organisation", organisationActive] as const,
   membres: () => ["membres", organisationActive] as const,
   invitations: () => ["invitations", organisationActive] as const,
@@ -78,8 +81,11 @@ export function useMoi(activee = true) {
 export function useConnexion() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (identifiants: { email: string; mot_de_passe: string }) =>
-      appelerApi("/auth/connexion", { methode: "POST", corps: identifiants }),
+    mutationFn: (identifiants: {
+      email: string;
+      mot_de_passe: string;
+      code_totp?: string;
+    }) => appelerApi("/auth/connexion", { methode: "POST", corps: identifiants }),
     onSuccess: () => client.invalidateQueries(),
   });
 }
@@ -107,6 +113,39 @@ export function useDeconnexion() {
   return useMutation({
     mutationFn: () => appelerApi<void>("/auth/deconnexion", { methode: "POST" }),
     onSuccess: () => client.clear(),
+  });
+}
+
+// --- Double authentification (TOTP) ------------------------------------------
+
+export function useEtatTotp() {
+  return useQuery({
+    queryKey: cles.totp,
+    queryFn: () => appelerApi<EtatTotp>("/auth/2fa"),
+  });
+}
+
+export function useActiverTotp() {
+  return useMutation({
+    mutationFn: () => appelerApi<ActivationTotp>("/auth/2fa/activer", { methode: "POST" }),
+  });
+}
+
+export function useConfirmerTotp() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (demande: { code: string }) =>
+      appelerApi<EtatTotp>("/auth/2fa/confirmer", { methode: "POST", corps: demande }),
+    onSuccess: () => client.invalidateQueries({ queryKey: cles.totp }),
+  });
+}
+
+export function useDesactiverTotp() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (demande: { mot_de_passe: string; code: string }) =>
+      appelerApi<EtatTotp>("/auth/2fa/desactiver", { methode: "POST", corps: demande }),
+    onSuccess: () => client.invalidateQueries({ queryKey: cles.totp }),
   });
 }
 
@@ -373,16 +412,21 @@ export function usePlans() {
   });
 }
 
-export function useActiverLicence() {
-  const client = useQueryClient();
+export function useDemarrerPaiement() {
   return useMutation({
-    mutationFn: (demande: { cle_licence: string; code_plan?: string }) =>
-      appelerApi<Abonnement>("/abonnement/licence", {
+    mutationFn: (demande: { code_plan: string }) =>
+      appelerApi<{ url: string }>("/abonnement/checkout", {
         methode: "POST",
         corps: demande,
         ...options(),
       }),
-    onSuccess: () => client.invalidateQueries(),
+  });
+}
+
+export function useOuvrirPortail() {
+  return useMutation({
+    mutationFn: () =>
+      appelerApi<{ url: string }>("/abonnement/portail", { methode: "POST", ...options() }),
   });
 }
 

@@ -50,10 +50,16 @@ class Parametres(BaseSettings):
     duree_jeton_acces_minutes: int = 15
     duree_jeton_rafraichissement_jours: int = 14
 
-    # --- Gumroad ---
-    gumroad_access_token: str = ""
-    gumroad_webhook_secret: str = "change_moi"
-    gumroad_produits: str = ""  # "id_produit:code_plan,id_produit:code_plan"
+    # --- Stripe (facturation) ---
+    stripe_cle_secrete: str = ""             # sk_test_... ou sk_live_...
+    stripe_webhook_secret: str = ""          # whsec_..., depuis le tableau de bord Stripe
+    stripe_url_retour_succes: str = "http://localhost:5173/abonnement?paiement=succes"
+    stripe_url_retour_annulation: str = "http://localhost:5173/abonnement?paiement=annule"
+    stripe_url_retour_portail: str = "http://localhost:5173/abonnement"
+    # Correspondance entre identifiants de prix Stripe et codes de plan internes,
+    # utilisée en repli si la colonne `plans.stripe_price_id` n'est pas renseignée.
+    # Format : id_prix_stripe:code_plan,id_prix_stripe:code_plan
+    stripe_prix: str = ""
 
     # --- Clés API des modules de site ---
     github_token: str = ""
@@ -89,13 +95,13 @@ class Parametres(BaseSettings):
         return chemin
 
     @property
-    def correspondance_produits_gumroad(self) -> dict[str, str]:
-        """{identifiant_produit_gumroad: code_plan_interne}"""
+    def correspondance_prix_stripe(self) -> dict[str, str]:
+        """{identifiant_prix_stripe: code_plan_interne}"""
         correspondance: dict[str, str] = {}
-        for paire in self.gumroad_produits.split(","):
+        for paire in self.stripe_prix.split(","):
             if ":" in paire:
-                produit, plan = paire.split(":", 1)
-                correspondance[produit.strip()] = plan.strip()
+                prix, plan = paire.split(":", 1)
+                correspondance[prix.strip()] = plan.strip()
         return correspondance
 
     @property

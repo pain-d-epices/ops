@@ -21,8 +21,6 @@ class PlanSortie(BaseModel):
     #: points de départ simultanés, pseudonyme compris ; 0 = illimité
     max_points_depart: int = 1
     fonctionnalites: list[str]
-    # Adresse d'achat Gumroad, construite à partir de l'identifiant produit configuré
-    url_achat: str | None = None
     est_plan_actuel: bool = False
 
 
@@ -40,19 +38,22 @@ class AbonnementSortie(BaseModel):
     periode_debut: datetime | None
     periode_fin: datetime | None
     renouvellement_automatique: bool
-    licence_active: bool
+    # Un client Stripe est lié dès la première session de paiement (voir /checkout) ;
+    # sert à décider si le portail de gestion (moyen de paiement, factures) est proposable.
+    stripe_lie: bool
     quotas: list[QuotaSortie]
     # Message d'incitation affiché quand un quota est proche de la limite
     message_limite: str | None = None
     plan_superieur: PlanSortie | None = None
 
 
-class DemandeActivationLicence(BaseModel):
-    """Activation manuelle d'une clé de licence Gumroad.
+class DemandeCheckout(BaseModel):
+    """Démarre un paiement Stripe pour passer au plan demandé."""
 
-    Voie de secours indispensable : les webhooks Gumroad ne sont pas réémis en cas
-    d'échec, et un client achète souvent avant même d'avoir créé son compte.
-    """
+    code_plan: str = Field(min_length=1, max_length=50)
 
-    cle_licence: str = Field(min_length=8, max_length=100)
-    code_plan: str | None = None   # facultatif : déduit du produit si absent
+
+class UrlSortie(BaseModel):
+    """URL de redirection Stripe (session de paiement ou portail client)."""
+
+    url: str

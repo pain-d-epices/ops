@@ -18,7 +18,7 @@ from app.facturation.garde import (
     profondeur_pivot_autorisee,
     sites_analysables,
 )
-from app.facturation.plans import EXPORT_CSV
+from app.facturation.plans import EXPORT_CSV, EXPORT_PDF
 from app.facturation.quotas import QuotaDepasse, consommer_quota, rembourser_quota
 from app.infra.limiteur_entrant import exiger_debit
 from app.modeles.enums import (
@@ -446,16 +446,22 @@ def relancer_correlation(
 def exporter(
     investigation_id: str,
     requete: Request,
-    format: str = Query(default="json", pattern="^(json|csv)$"),
+    format: str = Query(default="json", pattern="^(json|csv|pdf)$"),
     ctx: ContexteRequete = Depends(contexte_courant),
 ) -> Response:
-    """Exporte les résultats en JSON (complet) ou CSV (tableau des profils)."""
+    """Exporte les résultats en JSON (complet), CSV (tableau des profils) ou PDF
+    (rapport présentable, avec le détail des données extraites)."""
     investigation = _recuperer(ctx, investigation_id)
 
     if format == "csv" and not ctx.plan.possede(EXPORT_CSV):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             f"L'export CSV n'est pas inclus dans le plan {ctx.plan.nom_affiche}.",
+        )
+    if format == "pdf" and not ctx.plan.possede(EXPORT_PDF):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"L'export PDF n'est pas inclus dans le plan {ctx.plan.nom_affiche}.",
         )
 
     profils = ctx.session.scalars(
@@ -495,6 +501,24 @@ def exporter(
     donnees = ctx.session.scalars(
         select(DonneeExtraite).where(DonneeExtraite.investigation_id == investigation.id)
     ).all()
+
+    if format == "pdf":
+        from app.services.export_pdf import generer_rapport_pdf
+
+        donnees_par_profil: dict[str, list[DonneeExtraite]] = {}
+        for donnee in donnees:
+            donnees_par_profil.setdefault(donnee.profil_id, []).append(donnee)
+
+        pdf = generer_rapport_pdf(
+            investigation, profils, donnees_par_profil,
+            organisation_nom=ctx.organisation.nom,
+        )
+        return Response(
+            content=pdf,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{nom_fichier}.pdf"'},
+        )
+
     par_profil: dict[str, list[dict]] = {}
     for donnee in donnees:
         par_profil.setdefault(donnee.profil_id, []).append(

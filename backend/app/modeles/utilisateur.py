@@ -5,10 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, HorodatageMixin, nouvel_id
+
+TypeJson = JSON().with_variant(JSONB(), "postgresql")
 
 if TYPE_CHECKING:
     from app.modeles.organisation import Appartenance
@@ -30,9 +33,16 @@ class Utilisateur(Base, HorodatageMixin):
     cgu_acceptees_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cgu_version_acceptee: Mapped[str | None] = mapped_column(String(20))
 
-    # Champ prévu dès maintenant pour la 2FA (TOTP) livrée en v2 : évite une migration plus tard
-    totp_secret: Mapped[str | None] = mapped_column(String(64))
+    # 2FA (TOTP). Le secret est chiffré avant écriture (voir app/securite/totp.py) :
+    # 255 caractères couvrent largement un jeton Fernet d'un secret base32 de 32
+    # caractères (~140 en pratique). `totp_actif` ne passe à True qu'après
+    # confirmation par un code réel (voir /auth/2fa/confirmer) — un secret présent
+    # sans confirmation correspond à une activation en cours, pas encore effective.
+    totp_secret: Mapped[str | None] = mapped_column(String(255))
     totp_actif: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Empreintes SHA-256 des codes de secours non consommés (voir hacher_jeton) :
+    # jamais le code en clair, comme pour les jetons de rafraîchissement.
+    totp_codes_secours: Mapped[list[str]] = mapped_column(TypeJson, default=list, nullable=False)
 
     derniere_connexion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     tentatives_echouees: Mapped[int] = mapped_column(default=0, nullable=False)

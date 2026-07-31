@@ -4,6 +4,7 @@ import { MiseEnPage } from "./composants/MiseEnPage";
 import { useAuth } from "./contexts/AuthContext";
 import { PageAbonnement } from "./pages/Abonnement";
 import { PageAccueil } from "./pages/Accueil";
+import { PageCompte } from "./pages/Compte";
 import { PageConnexion } from "./pages/Connexion";
 import { PageInscription } from "./pages/Inscription";
 import { PageInvestigation } from "./pages/Investigation";
@@ -44,6 +45,7 @@ export function Application() {
         <Route path="/investigations/:investigationId" element={<PageInvestigation />} />
         <Route path="/abonnement" element={<PageAbonnement />} />
         <Route path="/organisation" element={<PageOrganisation />} />
+        <Route path="/compte" element={<PageCompte />} />
         <Route path="/connexion" element={<Navigate to="/" replace />} />
         <Route path="/inscription" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

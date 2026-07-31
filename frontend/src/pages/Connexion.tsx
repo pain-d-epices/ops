@@ -7,6 +7,10 @@ import { useConnexion } from "../api/hooks";
 export function PageConnexion() {
   const [email, setEmail] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
+  const [codeTotp, setCodeTotp] = useState("");
+  // Le premier appel (sans code) répond 401/totp_requis si le compte a activé la
+  // double authentification ; on affiche alors le second champ sans perdre la saisie.
+  const [totpRequis, setTotpRequis] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [serveurInjoignable, setServeurInjoignable] = useState(false);
   const connexion = useConnexion();
@@ -16,13 +20,22 @@ export function PageConnexion() {
     setErreur(null);
     setServeurInjoignable(false);
     try {
-      await connexion.mutateAsync({ email, mot_de_passe: motDePasse });
+      await connexion.mutateAsync({
+        email,
+        mot_de_passe: motDePasse,
+        code_totp: totpRequis ? codeTotp : undefined,
+      });
       // Rechargement complet : le contexte d'authentification et tous les caches
       // repartent proprement avec la nouvelle session.
       window.location.href = "/";
     } catch (exception) {
       if (exception instanceof ErreurApi) {
-        setErreur(exception.message);
+        if (exception.estTotpRequis) {
+          setTotpRequis(true);
+          setErreur(null);
+        } else {
+          setErreur(exception.message);
+        }
         setServeurInjoignable(exception.estServeurInjoignable);
       } else {
         setErreur("Connexion impossible.");
@@ -80,8 +93,30 @@ export function PageConnexion() {
               onChange={(e) => setMotDePasse(e.target.value)}
               autoComplete="current-password"
               required
+              disabled={totpRequis}
             />
           </div>
+
+          {totpRequis && (
+            <div className="champ">
+              <label htmlFor="code-totp">Code de vérification</label>
+              <input
+                id="code-totp"
+                type="text"
+                inputMode="numeric"
+                value={codeTotp}
+                onChange={(e) => setCodeTotp(e.target.value)}
+                autoComplete="one-time-code"
+                placeholder="123456"
+                required
+                autoFocus
+              />
+              <div className="aide">
+                Ouvrez votre application d'authentification, ou saisissez l'un de vos
+                codes de secours.
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"

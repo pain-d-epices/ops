@@ -5,7 +5,7 @@ lors de la génération des migrations (`alembic revision --autogenerate`).
 """
 
 from app.db.base import Base
-from app.modeles.facturation import Abonnement, CompteurUsage, EvenementGumroad, Plan
+from app.modeles.facturation import Abonnement, CompteurUsage, EvenementStripe, Plan
 from app.modeles.graphe import AreteGraphe, NoeudGraphe
 from app.modeles.investigation import (
     DonneeExtraite,
@@ -28,7 +28,7 @@ __all__ = [
     "CompteurUsage",
     "DonneeExtraite",
     "EntreeJournal",
-    "EvenementGumroad",
+    "EvenementStripe",
     "ExecutionRecherche",
     "Investigation",
     "Invitation",

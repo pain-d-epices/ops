@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ErreurApi, telechargerExport } from "../api/client";
 import {
+  useAbonnement,
   useGraphe,
   useInvestigation,
   useSupprimerInvestigation,
@@ -58,6 +59,8 @@ export function PageInvestigation() {
   const suivi = useSuiviInvestigation(investigationId, Boolean(enCours));
 
   const { data: graphe } = useGraphe(investigationId, scoreMinimal);
+  const { data: abonnement } = useAbonnement();
+  const exportPdfDisponible = Boolean(abonnement?.plan.fonctionnalites.includes("export_pdf"));
   const supprimer = useSupprimerInvestigation();
 
   const noeudCourant = useMemo(
@@ -80,7 +83,7 @@ export function PageInvestigation() {
       return copie;
     });
 
-  const exporter = async (format: "json" | "csv") => {
+  const exporter = async (format: "json" | "csv" | "pdf") => {
     setErreurExport(null);
     try {
       await telechargerExport(investigationId!, format, organisation?.id ?? null);
@@ -140,6 +143,19 @@ export function PageInvestigation() {
           </button>
           <button type="button" className="bouton-petit" onClick={() => exporter("csv")}>
             Export CSV
+          </button>
+          <button
+            type="button"
+            className="bouton-petit"
+            onClick={() => exporter("pdf")}
+            disabled={!exportPdfDisponible}
+            title={
+              exportPdfDisponible
+                ? undefined
+                : "Le rapport PDF est réservé aux plans payants (voir la page Abonnement)."
+            }
+          >
+            Export PDF
           </button>
           <button type="button"
             className="bouton-petit bouton-danger"

@@ -22,9 +22,9 @@ journal = logging.getLogger("initialiser_plans")
 
 
 def initialiser_plans() -> None:
-    correspondance_gumroad = {
-        code_plan: id_produit
-        for id_produit, code_plan in parametres().correspondance_produits_gumroad.items()
+    correspondance_stripe = {
+        code_plan: id_prix
+        for id_prix, code_plan in parametres().correspondance_prix_stripe.items()
     }
 
     with portee_session() as session:
@@ -50,9 +50,9 @@ def initialiser_plans() -> None:
             plan.max_sites_analyses = definition.max_sites_analyses
             plan.fonctionnalites = list(definition.fonctionnalites)
             plan.actif = True
-            # L'identifiant produit Gumroad vient du .env : il diffère entre
+            # L'identifiant de prix Stripe vient du .env : il diffère entre
             # l'environnement de test et la production.
-            plan.gumroad_product_id = correspondance_gumroad.get(definition.code)
+            plan.stripe_price_id = correspondance_stripe.get(definition.code)
 
     journal.info("Plans initialisés (%d paliers).", len(PLANS_PAR_DEFAUT))
 

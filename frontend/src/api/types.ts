@@ -27,6 +27,17 @@ export interface Utilisateur {
   organisations: OrganisationResumee[];
 }
 
+export interface EtatTotp {
+  actif: boolean;
+  codes_secours_restants: number;
+}
+
+export interface ActivationTotp {
+  secret: string;
+  qr_code_base64: string;
+  codes_secours: string[];
+}
+
 export interface ReponseConnexion {
   utilisateur: Utilisateur;
   organisation_active: string | null;
@@ -287,7 +298,6 @@ export interface Plan {
   /** Points de départ simultanés, pseudonyme compris ; 0 = illimité. */
   max_points_depart: number;
   fonctionnalites: string[];
-  url_achat: string | null;
   est_plan_actuel: boolean;
 }
 
@@ -305,7 +315,8 @@ export interface Abonnement {
   periode_debut: string | null;
   periode_fin: string | null;
   renouvellement_automatique: boolean;
-  licence_active: boolean;
+  /** Un client Stripe est lié dès la première session de paiement. */
+  stripe_lie: boolean;
   quotas: Quota[];
   message_limite: string | null;
   plan_superieur: Plan | null;

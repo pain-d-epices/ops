@@ -1,16 +1,23 @@
-"""Résolution du plan actif d'une organisation."""
+"""Résolution du plan actif d'une organisation, et gestion des abonnements.
+
+Volontairement indépendant du fournisseur de paiement (Stripe) : ce module ne connaît
+que la notion d'abonnement actif/résilié, jamais les identifiants Stripe eux-mêmes en
+dehors des colonnes où les stocker. Le code métier (quotas, garde-fous par plan) reste
+ainsi valable même si le fournisseur change un jour.
+"""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.base import maintenant
 from app.facturation.plans import CODE_PLAN_GRATUIT
 from app.modeles.enums import StatutAbonnement
 from app.modeles.facturation import Abonnement, Plan
+from app.modeles.organisation import Organisation
 
 
 class PlanIntrouvable(RuntimeError):
@@ -81,3 +88,74 @@ def expirer_abonnements_echus(session: Session) -> int:
         abo.statut = StatutAbonnement.EXPIRE.value
         compte += 1
     return compte
+
+
+def activer_abonnement(
+    session: Session,
+    organisation: Organisation,
+    plan: Plan,
+    *,
+    stripe_customer_id: str | None = None,
+    stripe_subscription_id: str | None = None,
+    stripe_price_id: str | None = None,
+    duree_jours: int = 31,
+) -> Abonnement:
+    """Active un plan pour une organisation et clôt l'abonnement précédent.
+
+    Une organisation n'a jamais deux abonnements actifs simultanément : l'ancien passe
+    en « annulé », ce qui évite toute ambiguïté sur le plan réellement applicable.
+
+    `duree_jours` n'est qu'une estimation initiale de la fin de période : l'échéance
+    réelle arrive ensuite par webhook (`customer.subscription.updated`), qui la
+    corrige. Sans ce filet, une organisation resterait sur le plan gratuit entre le
+    paiement et le premier webhook de renouvellement.
+    """
+    anciens = session.scalars(
+        select(Abonnement).where(
+            Abonnement.organisation_id == organisation.id,
+            Abonnement.statut == StatutAbonnement.ACTIF.value,
+        )
+    ).all()
+    for ancien in anciens:
+        ancien.statut = StatutAbonnement.ANNULE.value
+
+    debut = maintenant()
+    abonnement = Abonnement(
+        organisation_id=organisation.id,
+        plan_id=plan.id,
+        statut=StatutAbonnement.ACTIF.value,
+        periode_debut=debut,
+        periode_fin=debut + timedelta(days=duree_jours),
+        stripe_customer_id=stripe_customer_id,
+        stripe_subscription_id=stripe_subscription_id,
+        stripe_price_id=stripe_price_id or plan.stripe_price_id,
+        derniere_verification=debut,
+    )
+    session.add(abonnement)
+    return abonnement
+
+
+def resilier_abonnements(
+    session: Session, *, stripe_customer_id: str | None = None, stripe_subscription_id: str | None = None
+) -> int:
+    """Passe en « annulé » les abonnements correspondant à un client ou une
+    souscription Stripe. Rend le nombre d'abonnements résiliés."""
+    if not stripe_customer_id and not stripe_subscription_id:
+        return 0
+
+    conditions = []
+    if stripe_customer_id:
+        conditions.append(Abonnement.stripe_customer_id == stripe_customer_id)
+    if stripe_subscription_id:
+        conditions.append(Abonnement.stripe_subscription_id == stripe_subscription_id)
+
+    abonnements = session.scalars(
+        select(Abonnement).where(
+            Abonnement.statut == StatutAbonnement.ACTIF.value,
+            or_(*conditions),
+        )
+    ).all()
+    for abo in abonnements:
+        abo.statut = StatutAbonnement.ANNULE.value
+        abo.periode_fin = maintenant()
+    return len(abonnements)

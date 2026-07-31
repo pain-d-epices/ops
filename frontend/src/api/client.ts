@@ -34,6 +34,11 @@ export class ErreurApi extends Error {
     return this.code === "fonctionnalite_indisponible";
   }
 
+  /** Le mot de passe est correct, mais le compte exige un code à deux facteurs. */
+  get estTotpRequis(): boolean {
+    return this.code === "totp_requis";
+  }
+
   get estNonAuthentifie(): boolean {
     return this.statut === 401;
   }
@@ -203,7 +208,7 @@ function messageParDefaut(statut: number): string {
 /** Télécharge un export en déclenchant l'enregistrement du fichier par le navigateur. */
 export async function telechargerExport(
   investigationId: string,
-  format: "json" | "csv",
+  format: "json" | "csv" | "pdf",
   organisationId?: string | null,
 ): Promise<void> {
   const entetes: Record<string, string> = {};

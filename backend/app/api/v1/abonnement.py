@@ -1,31 +1,25 @@
-"""Endpoints d'abonnement : plan actif, quotas consommés, activation de licence Gumroad."""
+"""Endpoints d'abonnement : plan actif, quotas consommés, paiement et gestion Stripe."""
 
 from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
-from app.config import parametres
 from app.facturation.abonnements import abonnement_actif
 from app.facturation.quotas import etat_quotas
-from app.modeles.enums import ActionJournal, RoleMembre
+from app.modeles.enums import RoleMembre
 from app.modeles.facturation import Plan
 from app.schemas.abonnement import (
     AbonnementSortie,
-    DemandeActivationLicence,
+    DemandeCheckout,
     PlanSortie,
     QuotaSortie,
+    UrlSortie,
 )
 from app.securite.dependances import ContexteRequete, contexte_courant, exiger_role
-from app.services.gumroad import (
-    ErreurGumroad,
-    LicenceInvalide,
-    activer_abonnement,
-    verifier_licence,
-)
-from app.services.journal import journaliser
+from app.services.facturation_stripe import ErreurStripe, creer_session_paiement, creer_session_portail
 
 journal = logging.getLogger(__name__)
 routeur = APIRouter(prefix="/abonnement", tags=["Abonnement"])
@@ -35,12 +29,6 @@ SEUIL_ALERTE_QUOTA = 80.0
 
 
 def _plan_sortie(plan: Plan, plan_actuel_code: str | None = None) -> PlanSortie:
-    url_achat = None
-    if plan.gumroad_product_id:
-        # Gumroad propose une URL d'achat directe par produit ; l'identifiant est
-        # configuré dans le .env (GUMROAD_PRODUITS).
-        url_achat = f"https://gumroad.com/l/{plan.gumroad_product_id}"
-
     return PlanSortie(
         code=plan.code,
         nom_affiche=plan.nom_affiche,
@@ -54,14 +42,13 @@ def _plan_sortie(plan: Plan, plan_actuel_code: str | None = None) -> PlanSortie:
         profondeur_pivot_max=plan.profondeur_pivot_max,
         max_points_depart=plan.max_points_depart,
         fonctionnalites=list(plan.fonctionnalites or []),
-        url_achat=url_achat,
         est_plan_actuel=plan.code == plan_actuel_code,
     )
 
 
 @routeur.get("/plans", response_model=list[PlanSortie])
 def lister_plans(ctx: ContexteRequete = Depends(contexte_courant)) -> list[PlanSortie]:
-    """Tous les paliers disponibles, avec le lien d'achat Gumroad correspondant."""
+    """Tous les paliers disponibles."""
     plans = ctx.session.scalars(
         select(Plan).where(Plan.actif.is_(True)).order_by(Plan.ordre)
     ).all()
@@ -102,7 +89,7 @@ def etat_abonnement(ctx: ContexteRequete = Depends(contexte_courant)) -> Abonnem
         periode_debut=abonnement.periode_debut if abonnement else None,
         periode_fin=abonnement.periode_fin if abonnement else None,
         renouvellement_automatique=abonnement.renouvellement_automatique if abonnement else False,
-        licence_active=bool(abonnement and abonnement.gumroad_license_key),
+        stripe_lie=bool(abonnement and abonnement.stripe_customer_id),
         quotas=[
             QuotaSortie(
                 nom=e.nom, consomme=e.consomme, limite=e.limite,
@@ -115,69 +102,41 @@ def etat_abonnement(ctx: ContexteRequete = Depends(contexte_courant)) -> Abonnem
     )
 
 
-@routeur.post("/licence", response_model=AbonnementSortie)
-def activer_licence(
-    demande: DemandeActivationLicence,
-    requete: Request,
+@routeur.post("/checkout", response_model=UrlSortie)
+def demarrer_paiement(
+    demande: DemandeCheckout,
     ctx: ContexteRequete = Depends(exiger_role(RoleMembre.ADMIN.value)),
-) -> AbonnementSortie:
-    """Active un abonnement à partir d'une clé de licence Gumroad.
+) -> UrlSortie:
+    """Démarre un paiement Stripe pour passer l'organisation au plan demandé.
 
-    Voie principale d'activation : le webhook Gumroad ne suffit pas, car il n'est pas
-    réémis en cas d'échec et l'achat précède souvent la création du compte.
+    L'abonnement n'est activé qu'à réception du webhook `checkout.session.completed`,
+    une fois le paiement effectivement confirmé — jamais à cet appel, qui ne fait que
+    créer la session vers laquelle rediriger le client.
     """
-    if not parametres().gumroad_access_token and not demande.code_plan:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "La vérification des licences n'est pas configurée sur ce serveur.",
-        )
+    plan = ctx.session.scalar(select(Plan).where(Plan.code == demande.code_plan, Plan.actif.is_(True)))
+    if plan is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Plan introuvable.")
+    if plan.prix_mensuel_cents == 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Le plan gratuit ne nécessite aucun paiement.")
 
-    # Déterminer le produit à vérifier : soit le plan demandé, soit un essai sur
-    # chacun des produits configurés.
-    plans_candidats = ctx.session.scalars(
-        select(Plan).where(Plan.actif.is_(True), Plan.gumroad_product_id.is_not(None))
-    ).all()
-    if demande.code_plan:
-        plans_candidats = [p for p in plans_candidats if p.code == demande.code_plan]
+    try:
+        url = creer_session_paiement(ctx.organisation, plan, ctx.utilisateur.email)
+    except ErreurStripe as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    return UrlSortie(url=url)
 
-    if not plans_candidats:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Aucun produit Gumroad n'est associé à un plan sur ce serveur.",
-        )
 
-    derniere_erreur = "Clé de licence non reconnue."
-    for plan in plans_candidats:
-        try:
-            achat = verifier_licence(plan.gumroad_product_id or "", demande.cle_licence)
-        except LicenceInvalide as exc:
-            derniere_erreur = str(exc)
-            continue
-        except ErreurGumroad as exc:
-            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+@routeur.post("/portail", response_model=UrlSortie)
+def ouvrir_portail(
+    ctx: ContexteRequete = Depends(exiger_role(RoleMembre.ADMIN.value)),
+) -> UrlSortie:
+    """Ouvre le portail client Stripe : moyen de paiement, factures, annulation.
 
-        activer_abonnement(
-            ctx.session,
-            ctx.organisation,
-            plan,
-            cle_licence=demande.cle_licence,
-            gumroad_product_id=plan.gumroad_product_id,
-            gumroad_sale_id=achat.get("sale_id") or achat.get("id"),
-            email_acheteur=achat.get("email"),
-        )
-        journaliser(
-            ctx.session, ActionJournal.PLAN_CHANGE,
-            organisation_id=ctx.organisation_id, utilisateur_id=ctx.utilisateur.id,
-            email_utilisateur=ctx.utilisateur.email, requete=requete,
-            detail={"plan": plan.code, "source": "licence_manuelle"},
-        )
-        ctx.session.commit()
-
-        # Le contexte a été construit avec l'ancien plan : le rafraîchir pour que la
-        # réponse reflète immédiatement le nouvel abonnement.
-        from app.facturation.abonnements import plan_actif
-
-        ctx.plan = plan_actif(ctx.session, ctx.organisation_id)
-        return etat_abonnement(ctx)
-
-    raise HTTPException(status.HTTP_400_BAD_REQUEST, derniere_erreur)
+    Stripe héberge cette interface — aucune donnée de paiement ne transite par
+    Searcher, ni avant ni après cet appel.
+    """
+    try:
+        url = creer_session_portail(ctx.organisation_id, ctx.session)
+    except ErreurStripe as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    return UrlSortie(url=url)

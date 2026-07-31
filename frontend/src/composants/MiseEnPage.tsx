@@ -34,6 +34,9 @@ export function MiseEnPage({ children }: { children: ReactNode }) {
             <NavLink to="/organisation" className={({ isActive }) => (isActive ? "actif" : "")}>
               Organisation
             </NavLink>
+            <NavLink to="/compte" className={({ isActive }) => (isActive ? "actif" : "")}>
+              Mon compte
+            </NavLink>
           </nav>
         </div>
 

@@ -1,4 +1,4 @@
-"""Modèles de facturation : plans, abonnements Gumroad, compteurs d'usage.
+"""Modèles de facturation : plans, abonnements Stripe, compteurs d'usage.
 
 Volontairement découplés du reste du code métier : ajuster un palier consiste à
 modifier une ligne de la table `plans`, jamais à toucher à la logique applicative.
@@ -57,8 +57,8 @@ class Plan(Base, HorodatageMixin):
     # Liste de codes : ["modules", "pivot", "pivot_automatique", "export_pdf", "api", "retention_etendue"]
     fonctionnalites: Mapped[list[str]] = mapped_column(TypeJson, default=list, nullable=False)
 
-    # Identifiant du produit Gumroad correspondant (null pour le palier gratuit)
-    gumroad_product_id: Mapped[str | None] = mapped_column(String(100))
+    # Identifiant du prix Stripe correspondant (null pour le palier gratuit)
+    stripe_price_id: Mapped[str | None] = mapped_column(String(100))
 
     actif: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
@@ -91,13 +91,13 @@ class Abonnement(Base, HorodatageMixin):
     periode_fin: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     renouvellement_automatique: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    # --- Rattachement Gumroad ---
-    # Gumroad est "merchant of record" : il encaisse et gère la TVA. Le lien avec une
-    # organisation se fait par clé de licence, vérifiable à tout moment via son API.
-    gumroad_license_key: Mapped[str | None] = mapped_column(String(100), index=True)
-    gumroad_product_id: Mapped[str | None] = mapped_column(String(100))
-    gumroad_sale_id: Mapped[str | None] = mapped_column(String(100))
-    gumroad_email_acheteur: Mapped[str | None] = mapped_column(String(255))
+    # --- Rattachement Stripe ---
+    # Stripe pilote l'abonnement depuis notre application (Checkout + portail client) :
+    # le lien avec une organisation se fait par identifiant client, posé en métadonnée
+    # dès la création de la session de paiement (voir services/facturation_stripe.py).
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(100), index=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(100), index=True)
+    stripe_price_id: Mapped[str | None] = mapped_column(String(100))
     derniere_verification: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     organisation: Mapped[Organisation] = relationship(back_populates="abonnements")
@@ -135,20 +135,23 @@ class CompteurUsage(Base, HorodatageMixin):
         return f"<CompteurUsage {self.organisation_id} {self.periode}>"
 
 
-class EvenementGumroad(Base):
-    """Journal brut des webhooks Gumroad reçus.
+class EvenementStripe(Base):
+    """Journal brut des webhooks Stripe reçus.
 
     Conservé tel quel : indispensable pour rejouer un événement mal traité et pour
     prouver l'historique d'un abonnement en cas de litige avec un client.
+    `stripe_event_id` sert à la déduplication — Stripe garantit une livraison *au
+    moins une fois*, un même événement peut donc arriver plusieurs fois.
     """
 
-    __tablename__ = "evenements_gumroad"
+    __tablename__ = "evenements_stripe"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
-    type_evenement: Mapped[str] = mapped_column(String(50), nullable=False)   # sale, refund, cancellation...
-    gumroad_sale_id: Mapped[str | None] = mapped_column(String(100), index=True)
-    gumroad_license_key: Mapped[str | None] = mapped_column(String(100), index=True)
-    email: Mapped[str | None] = mapped_column(String(255), index=True)
+    # checkout.session.completed, customer.subscription.updated, customer.subscription.deleted...
+    type_evenement: Mapped[str] = mapped_column(String(50), nullable=False)
+    stripe_event_id: Mapped[str | None] = mapped_column(String(100), unique=True, index=True)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(100), index=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(100), index=True)
     charge_utile: Mapped[dict[str, Any]] = mapped_column(TypeJson, default=dict, nullable=False)
     traite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     erreur_traitement: Mapped[str | None] = mapped_column(String(1000))
