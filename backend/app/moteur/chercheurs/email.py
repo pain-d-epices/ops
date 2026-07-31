@@ -26,16 +26,11 @@ from app.modeles.enums import TypeDonnee, TypePointDepart
 from app.modules.base import ModuleSite
 from app.moteur.chercheurs.base import Chercheur, RappelProgression, ResultatChercheur
 from app.moteur.user_scanner_runner import OptionsUserScanner, runner_user_scanner
+from app.securite.domaines_jetables import est_domaine_jetable
 
 journal = logging.getLogger(__name__)
 
 MOTIF_EMAIL = re.compile(r"^[\w.+-]+@[\w-]+\.[\w.-]{2,}$")
-
-# Domaines jetables : trouver un compte derrière n'apprend rien sur une personne
-DOMAINES_JETABLES = {
-    "mailinator.com", "yopmail.com", "guerrillamail.com", "10minutemail.com",
-    "tempmail.com", "throwawaymail.com", "trashmail.com",
-}
 
 
 class ChercheurEmail(Chercheur):
@@ -68,7 +63,10 @@ class ChercheurEmail(Chercheur):
 
         resultat.ajouter_information(TypeDonnee.EMAIL, adresse, confiance=1.0)
 
-        if domaine in DOMAINES_JETABLES:
+        # Une adresse jetable n'est pas écartée ici, seulement signalée : trouver un
+        # compte derrière n'apprend rien sur une personne, mais l'information que la
+        # cible en utilise une a de la valeur pour l'analyste.
+        if est_domaine_jetable(domaine):
             resultat.detail["domaine_jetable"] = True
             journal.info("Adresse jetable détectée : %s", domaine)
 

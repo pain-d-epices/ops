@@ -235,6 +235,13 @@ curl -X POST http://localhost:8000/api/v1/auth/inscription \
 L'acceptation des conditions d'utilisation est obligatoire : c'est la trace du
 consentement au cadre légal, exigée avant toute recherche.
 
+Depuis l'interface, rien de plus n'est demandé. **En ligne de commande, cet appel
+échoue** avec « Épreuve anti-robot absente » : l'inscription exige une preuve de
+calcul que le navigateur résout tout seul (voir
+[Protection contre l'abus](#protection-contre-labus)). Pour créer un compte sans
+navigateur — script d'amorçage, test manuel — passer `anti_abus.actif: false` dans
+`backend/config.yaml`, ou utiliser l'interface.
+
 ### 2. Lancer une investigation
 
 ```bash
@@ -307,7 +314,35 @@ Réglages les plus utiles dans `config.yaml` :
 - `correlation.seuils` — bornes des niveaux de confiance faible / moyen / élevé
 - `pivot.profondeur_plafond_serveur` — plafond dur qu'aucun plan ne peut dépasser
 - `rate_limiting.par_domaine` — débit autorisé vers chaque site cible
+- `anti_abus.*` — protections contre la création de comptes en série (ci-dessous)
 - `retention.jours_defaut` — durée de conservation des investigations (RGPD)
+
+### Protection contre l'abus
+
+Le palier gratuit offrant 15 recherches par mois, un script qui crée des comptes en
+série obtiendrait un volume illimité. Quatre protections, toutes réglables sous
+`anti_abus` dans `config.yaml`, toutes sans service tiers ni frais :
+
+| Protection | Effet | Réglage |
+|---|---|---|
+| Épreuve de calcul | L'inscription exige une preuve que le navigateur calcule en ~300 ms, en arrière-plan pendant la saisie. Chaque preuve ne sert qu'une fois. | `nombre_maximal`, `validite_defi_secondes` |
+| Plafond par adresse IP | Pas plus de N organisations créées par jour depuis une même connexion. Rejoindre une organisation sur invitation n'est pas concerné. | `comptes_par_ip_par_jour` |
+| Limitation de débit | Borne le rythme des inscriptions, connexions et investigations par adresse IP. | `debit.*` |
+| Refus des adresses jetables | Les domaines de messagerie temporaire sont écartés à l'inscription. | `app/securite/domaines_jetables.py` |
+
+Deux points d'attention :
+
+- **`derriere_un_proxy_de_confiance` doit rester à `false`** tant qu'aucun proxy
+  (Caddy, Nginx, Traefik) n'est réellement devant l'application. À `true` sans proxy,
+  n'importe qui contourne toute limitation par IP en changeant un en-tête à chaque
+  requête. À `false` derrière un proxy, toutes les requêtes semblent venir de la même
+  adresse et un seul utilisateur trop actif bloquerait tout le monde.
+- **Redis n'est pas indispensable** : sans lui, les compteurs retombent en mémoire du
+  processus. La règle reste appliquée, sa portée seule est réduite (un compteur par
+  processus au lieu d'un compteur partagé).
+
+L'ensemble se désactive d'un `anti_abus.actif: false` — utile en développement ou pour
+un script d'amorçage, à ne pas laisser en production.
 
 ### Clés API recommandées
 

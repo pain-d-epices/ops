@@ -215,3 +215,45 @@ retention:
   jours_defaut: 90
   # Durée de conservation des journaux d'accès (obligation de traçabilité)
   jours_journaux: 365
+
+# --- Protection contre l'automatisation et l'abus ---------------------------
+# À ne pas confondre avec `rate_limiting` plus haut, qui borne nos requêtes SORTANTES
+# vers les sites interrogés. Cette section borne les requêtes ENTRANTES, par adresse IP.
+anti_abus:
+  # Mettre à false désactive toutes les protections de cette section, épreuve
+  # anti-robot comprise. Réservé aux tests automatisés.
+  actif: true
+
+  # Ne lire l'en-tête X-Forwarded-For que si un proxy de confiance est réellement
+  # devant l'application (Caddy, Nginx, Traefik). Le lire sans proxy est une faille :
+  # l'en-tête vient du client, qui le changerait à chaque requête pour se présenter
+  # sous une nouvelle adresse et contourner toute limitation.
+  derriere_un_proxy_de_confiance: false
+
+  # Plafond dur de créations d'organisation par adresse IP et par 24 h. Le palier
+  # gratuit offrant 15 recherches par mois, sans ce plafond un script obtiendrait un
+  # volume illimité en multipliant les comptes. 0 désactive le plafond.
+  comptes_par_ip_par_jour: 3
+
+  # Épreuve anti-robot. `nombre_maximal` fixe le coût de résolution : plus il est
+  # élevé, plus créer un compte coûte de calcul — au robot comme à l'utilisateur.
+  # 50 000 représente environ 300 ms dans un navigateur courant, calculées pendant
+  # que l'utilisateur remplit le formulaire : il n'attend donc jamais.
+  nombre_maximal: 50000
+  validite_defi_secondes: 900
+
+  # Débit autorisé par adresse IP. `rafale` est le nombre de requêtes admises d'un
+  # coup, `requetes_par_minute` le rythme de rechargement ensuite.
+  debit:
+    inscription:
+      requetes_par_minute: 3
+      rafale: 3
+    connexion:
+      requetes_par_minute: 10
+      rafale: 10
+    investigation:
+      requetes_par_minute: 20
+      rafale: 10
+    defi:
+      requetes_par_minute: 30
+      rafale: 15

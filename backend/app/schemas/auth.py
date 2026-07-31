@@ -19,6 +19,9 @@ class DemandeInscription(BaseModel):
     # L'acceptation des conditions est exigée dès l'inscription : l'outil traite des
     # données personnelles de tiers, le cadre légal doit être accepté avant tout usage.
     accepter_cgu: bool = False
+    # Solution de l'épreuve anti-automatisation, obtenue sur /auth/defi-anti-robot et
+    # résolue par le navigateur. Voir app/securite/anti_bot.py.
+    preuve_anti_robot: str | None = None
 
 
 class DemandeConnexion(BaseModel):

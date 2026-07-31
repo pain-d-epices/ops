@@ -1,8 +1,54 @@
 # Où reprendre
 
-Point d'étape au **30/07/2026**.
+Point d'étape au **31/07/2026**.
 
 ## État : application vérifiée de bout en bout
+
+### Protection contre la création de comptes en série (31/07/2026)
+
+Le palier gratuit offrant 15 recherches par mois, rien n'empêchait jusqu'ici un
+script d'en obtenir un volume illimité en créant des comptes à la chaîne. Quatre
+protections, **sans service tiers ni frais** — même parti pris que « APIs publiques
+uniquement » : faire passer chaque visiteur par un service de détection de robots
+révélerait à un tiers qui s'intéresse à l'outil.
+
+1. **Épreuve de calcul à l'inscription** (`app/securite/anti_bot.py`) — le serveur
+   pose une énigme que seul l'essai exhaustif résout. Format Altcha, mais écrit
+   entièrement ici, serveur et client, sans dépendance. Signature HMAC (on ne peut
+   pas fabriquer son propre défi), horodatage dans le sel (péremption), et marquage
+   du défi consommé dans Redis (pas de rejeu).
+2. **Plafond de 3 organisations par IP et par 24 h** — compteur à fenêtre fixe.
+   Incrémenté même quand l'inscription échoue ensuite, sinon un script sonderait les
+   adresses déjà prises sans jamais consommer son plafond. Les invitations ne sont
+   pas concernées : rejoindre une organisation n'ouvre aucun quota.
+3. **Limitation de débit par IP** (`app/infra/limiteur_entrant.py`) sur
+   l'inscription, la connexion et la création d'investigation. Le verrou par compte
+   (8 échecs) ne couvrait pas le balayage de nombreuses adresses depuis une même
+   origine, chaque compte restant sous son seuil.
+4. **Refus des adresses jetables** à l'inscription. La liste existait déjà dans le
+   chercheur `email`, où elle sert au contraire à *signaler* — deux usages opposés,
+   d'où un module partagé (`app/securite/domaines_jetables.py`).
+
+Trois points d'attention :
+
+- **`derriere_un_proxy_de_confiance` est à `false`** dans `config.yaml` et doit le
+  rester tant qu'aucun proxy n'est déployé. À `true` sans proxy, `X-Forwarded-For`
+  vient du client : il suffirait de le changer à chaque requête pour se présenter
+  sous une nouvelle adresse. À passer à `true` **le jour du déploiement derrière
+  Caddy/Nginx**, faute de quoi tous les utilisateurs partageront un seul compteur.
+- **Redis n'est pas indispensable** : chaque compteur retombe en mémoire du processus
+  s'il manque. La règle reste appliquée, seule sa portée est réduite. Dégrader la
+  portée, pas la règle — même parti pris que `infra/limiteur.py`.
+- **L'inscription en ligne de commande ne fonctionne plus** sans désactiver
+  `anti_abus.actif` : c'est voulu, mais cela surprend. Noté dans le README.
+
+**Vérifié dans le navigateur le 31/07/2026** : épreuve demandée au chargement de la
+page, résolue en **240 ms pour 39 000 essais** (~300 ms au pire cas, sur une machine
+courante) pendant la saisie — l'utilisateur ne voit rien et n'attend pas ; inscription
+acceptée (201). Côté serveur : appel sans preuve refusé (400), et 14 tentatives de
+connexion d'affilée donnent 10 × 401 puis 4 × 429, exactement le réglage annoncé.
+
+13 tests dédiés, 154 au total.
 
 ### Nouvelle grille tarifaire (30/07/2026)
 

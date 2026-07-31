@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { ErreurApi } from "../api/client";
+import { obtenirPreuve, resolutionPossible } from "../api/antiBot";
 import { useInscription } from "../api/hooks";
 
 const LONGUEUR_MINIMALE = 12;
@@ -19,6 +20,29 @@ export function PageInscription() {
   const [erreur, setErreur] = useState<string | null>(null);
   const inscription = useInscription();
 
+  // L'épreuve anti-robot est demandée et résolue dès l'ouverture de la page, en
+  // arrière-plan : le temps de remplir le formulaire, la preuve est prête et
+  // l'utilisateur n'attend rien. Une référence plutôt qu'un état, car sa valeur
+  // n'a aucun effet sur l'affichage.
+  const preuve = useRef<Promise<string> | null>(null);
+
+  const preparerPreuve = () => {
+    if (!resolutionPossible()) {
+      preuve.current = null;
+      return;
+    }
+    // L'échec est capté ici pour ne pas produire de rejet non traité ; il sera
+    // relevé au moment de la soumission, seul moment où il compte.
+    const promesse = obtenirPreuve();
+    promesse.catch(() => undefined);
+    preuve.current = promesse;
+  };
+
+  useEffect(() => {
+    preparerPreuve();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const motDePasseTropCourt = motDePasse.length > 0 && motDePasse.length < LONGUEUR_MINIMALE;
 
   const soumettre = async (evenement: FormEvent) => {
@@ -30,6 +54,17 @@ export function PageInscription() {
       return;
     }
 
+    let preuveAntiRobot: string | undefined;
+    if (preuve.current) {
+      try {
+        preuveAntiRobot = await preuve.current;
+      } catch {
+        setErreur("Vérification de sécurité indisponible. Réessayez dans un instant.");
+        preparerPreuve();
+        return;
+      }
+    }
+
     try {
       await inscription.mutateAsync({
         email,
@@ -38,12 +73,16 @@ export function PageInscription() {
         nom_organisation: jetonInvitation ? undefined : nomOrganisation || undefined,
         jeton_invitation: jetonInvitation || undefined,
         accepter_cgu: cguAcceptees,
+        preuve_anti_robot: preuveAntiRobot,
       });
       window.location.href = "/";
     } catch (exception) {
       setErreur(
         exception instanceof ErreurApi ? exception.message : "Inscription impossible.",
       );
+      // Une preuve n'est valable qu'une fois : qu'elle ait été consommée par un
+      // envoi refusé plus loin ou rejetée, il en faut une neuve pour réessayer.
+      preparerPreuve();
     }
   };
 

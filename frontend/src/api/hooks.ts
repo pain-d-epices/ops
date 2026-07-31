@@ -94,6 +94,9 @@ export function useInscription() {
       nom_organisation?: string;
       jeton_invitation?: string;
       accepter_cgu: boolean;
+      // Solution de l'épreuve anti-automatisation, résolue en arrière-plan par
+      // le navigateur. Voir api/antiBot.ts.
+      preuve_anti_robot?: string;
     }) => appelerApi("/auth/inscription", { methode: "POST", corps: demande }),
     onSuccess: () => client.invalidateQueries(),
   });

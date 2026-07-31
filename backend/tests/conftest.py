@@ -68,6 +68,31 @@ def client() -> TestClient:
 
 
 @pytest.fixture(autouse=True)
+def sans_protections_anti_abus():
+    """Désactive les protections anti-automatisation pour la majorité des tests.
+
+    Elles bornent les créations de comptes par adresse IP et exigent la résolution
+    d'une épreuve : la suite de tests, qui crée des dizaines de comptes depuis la même
+    origine, les déclencherait toutes. Les tests qui vérifient ces protections les
+    réactivent explicitement (voir `test_anti_abus.py`).
+    """
+    from app.config import surcharger_config_metier
+    from app.infra.limiteur_entrant import reinitialiser_limiteur_entrant
+    from app.infra.redis_client import reinitialiser_client_redis
+    from app.securite.anti_bot import reinitialiser_epreuves_consommees
+
+    def remettre_a_zero() -> None:
+        surcharger_config_metier("anti_abus.actif", False)
+        reinitialiser_limiteur_entrant()
+        reinitialiser_client_redis()
+        reinitialiser_epreuves_consommees()
+
+    remettre_a_zero()
+    yield
+    remettre_a_zero()
+
+
+@pytest.fixture(autouse=True)
 def sans_file_de_taches(monkeypatch):
     """Neutralise l'envoi vers Celery : les tests ne dépendent pas d'un broker.
 

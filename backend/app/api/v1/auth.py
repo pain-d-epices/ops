@@ -10,10 +10,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import parametres
+from app.config import config_metier, parametres
 from app.db.base import maintenant, nouvel_id
 from app.db.session import obtenir_session
 from app.facturation.abonnements import plan_actif
+from app.infra.limiteur_entrant import (
+    adresse_client,
+    exiger_debit,
+    limiteur_entrant,
+)
 from app.modeles.enums import ActionJournal, RoleMembre
 from app.modeles.organisation import Appartenance, Invitation, Organisation
 from app.modeles.utilisateur import JetonRafraichissement, Utilisateur
@@ -25,6 +30,7 @@ from app.schemas.auth import (
     ReponseConnexion,
     UtilisateurSortie,
 )
+from app.securite.anti_bot import PreuveInvalide, creer_defi, verifier_preuve
 from app.securite.dependances import (
     NOM_COOKIE_ACCES,
     NOM_COOKIE_RAFRAICHISSEMENT,
@@ -32,6 +38,7 @@ from app.securite.dependances import (
     contexte_courant,
     utilisateur_courant,
 )
+from app.securite.domaines_jetables import est_domaine_jetable
 from app.securite.jetons import creer_jeton_acces
 from app.securite.mots_de_passe import (
     MotDePasseInvalide,
@@ -50,6 +57,12 @@ VERSION_CGU = "1.0"
 # Après ce nombre d'échecs, le compte est temporairement bloqué (anti-force brute)
 TENTATIVES_AVANT_BLOCAGE = 8
 DUREE_BLOCAGE_MINUTES = 15
+
+#: Plafond par défaut de créations d'organisation depuis une même adresse IP, par
+#: 24 heures. Le palier gratuit offrant 15 recherches par mois, sans ce plafond un
+#: script obtiendrait un volume illimité en multipliant les comptes.
+COMPTES_PAR_IP_PAR_JOUR = 3
+FENETRE_COMPTES_SECONDES = 24 * 3600
 
 
 def _slugifier(nom: str) -> str:
@@ -129,7 +142,65 @@ def _utilisateur_sortie(session: Session, utilisateur: Utilisateur) -> Utilisate
     )
 
 
-@routeur.post("/inscription", response_model=ReponseConnexion, status_code=status.HTTP_201_CREATED)
+def _verifier_plafond_creation(requete: Request, email: str, session: Session) -> None:
+    """Refuse la création d'une organisation de plus depuis une IP trop active.
+
+    Le compteur est incrémenté même quand la création finit par échouer pour une autre
+    raison : sinon, un script sonderait les adresses déjà prises sans jamais consommer
+    son plafond.
+    """
+    if not config_metier().obtenir("anti_abus.actif", True):
+        return
+    plafond = int(
+        config_metier().obtenir("anti_abus.comptes_par_ip_par_jour", COMPTES_PAR_IP_PAR_JOUR)
+    )
+    if plafond <= 0:
+        return
+
+    ip = adresse_client(requete)
+    total = limiteur_entrant().compter("inscription", ip, FENETRE_COMPTES_SECONDES)
+    if total > plafond:
+        journal.warning(
+            "Plafond de création de comptes atteint depuis %s (%d tentatives) — refus pour %s",
+            ip, total, email,
+        )
+        journaliser(
+            session, ActionJournal.CONNEXION_ECHOUEE,
+            email_utilisateur=email, requete=requete,
+            resultat="plafond de création de comptes par IP atteint",
+        )
+        session.commit()
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Trop de comptes ont été créés depuis cette connexion aujourd'hui. "
+            "Réessayez demain, ou contactez-nous si vous équipez une équipe.",
+        )
+
+
+@routeur.get("/defi-anti-robot", dependencies=[Depends(exiger_debit("defi"))])
+def defi_anti_robot() -> dict:
+    """Fournit l'épreuve à résoudre avant de pouvoir créer un compte.
+
+    Le formulaire d'inscription la demande au chargement et la résout en arrière-plan,
+    de sorte que l'utilisateur n'attend jamais : la solution est prête avant qu'il ait
+    fini de saisir son mot de passe. Voir `app/securite/anti_bot.py` pour le principe.
+    """
+    defi = creer_defi()
+    return {
+        "algorithm": defi.algorithm,
+        "challenge": defi.challenge,
+        "salt": defi.salt,
+        "signature": defi.signature,
+        "maxnumber": defi.maxnumber,
+    }
+
+
+@routeur.post(
+    "/inscription",
+    response_model=ReponseConnexion,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(exiger_debit("inscription"))],
+)
 def inscription(
     demande: DemandeInscription,
     requete: Request,
@@ -144,6 +215,28 @@ def inscription(
             status.HTTP_400_BAD_REQUEST,
             "L'acceptation des conditions d'utilisation est obligatoire pour créer un compte.",
         )
+
+    # --- Protections anti-automatisation ---
+    # Contrôlées avant toute écriture, et avant même l'unicité de l'adresse : cette
+    # route est la porte d'entrée du palier gratuit, donc la cible naturelle d'un
+    # script cherchant à multiplier les quotas.
+    try:
+        verifier_preuve(demande.preuve_anti_robot)
+    except PreuveInvalide as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    if est_domaine_jetable(email):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Les adresses électroniques jetables ne sont pas acceptées. "
+            "Utilisez une adresse permanente.",
+        )
+
+    # Le plafond ne porte que sur la création d'une **organisation** : rejoindre une
+    # organisation existante sur invitation n'ouvre aucun quota supplémentaire, et
+    # plusieurs collègues partagent souvent la même adresse IP.
+    if not demande.jeton_invitation:
+        _verifier_plafond_creation(requete, email, session)
 
     if session.scalar(select(Utilisateur.id).where(Utilisateur.email == email)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Un compte existe déjà avec cette adresse.")
@@ -216,7 +309,14 @@ def inscription(
     )
 
 
-@routeur.post("/connexion", response_model=ReponseConnexion)
+@routeur.post(
+    "/connexion",
+    response_model=ReponseConnexion,
+    # Le verrou par compte (8 échecs) ne protège pas d'un balayage de nombreuses
+    # adresses depuis une même origine : chaque compte reste sous son seuil. La limite
+    # par IP couvre ce cas.
+    dependencies=[Depends(exiger_debit("connexion"))],
+)
 def connexion(
     demande: DemandeConnexion,
     requete: Request,

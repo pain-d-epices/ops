@@ -20,6 +20,7 @@ from app.facturation.garde import (
 )
 from app.facturation.plans import EXPORT_CSV
 from app.facturation.quotas import QuotaDepasse, consommer_quota, rembourser_quota
+from app.infra.limiteur_entrant import exiger_debit
 from app.modeles.enums import (
     ActionJournal,
     RoleMembre,
@@ -193,7 +194,15 @@ def _enregistrer_points_depart(
     session.flush()
 
 
-@routeur.post("", response_model=InvestigationDetaillee, status_code=status.HTTP_201_CREATED)
+@routeur.post(
+    "",
+    response_model=InvestigationDetaillee,
+    status_code=status.HTTP_201_CREATED,
+    # Les quotas bornent le volume *mensuel* ; cette limite borne le *rythme*. Sans
+    # elle, un client peut épuiser son quota en quelques secondes et saturer la file
+    # de tâches au détriment des autres organisations.
+    dependencies=[Depends(exiger_debit("investigation"))],
+)
 def creer_investigation(
     demande: DemandeInvestigation,
     requete: Request,

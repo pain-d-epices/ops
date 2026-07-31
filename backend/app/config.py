@@ -145,3 +145,27 @@ def config_metier() -> ConfigMetier:
 def recharger_config_metier() -> None:
     """Vide le cache : utile en tests, ou pour recharger config.yaml sans redémarrer."""
     config_metier.cache_clear()
+
+
+def surcharger_config_metier(chemin: str, valeur: Any) -> None:
+    """Remplace une valeur de configuration en mémoire, pour le processus courant.
+
+    **Prévu pour les tests automatisés**, qui doivent pouvoir désactiver une
+    protection ou en durcir un seuil sans réécrire `config.yaml`.
+
+    Agit sur l'instance mise en cache, donc sur tous les modules à la fois : c'est
+    nécessaire, car ils importent `config_metier` par valeur (`from app.config import
+    config_metier`) et un remplacement de l'attribut de module ne les atteindrait pas.
+
+    `recharger_config_metier()` annule toutes les surcharges.
+    """
+    conf = config_metier()
+    courant = conf.brut
+    cles = chemin.split(".")
+    for cle in cles[:-1]:
+        suivant = courant.get(cle)
+        if not isinstance(suivant, dict):
+            suivant = {}
+            courant[cle] = suivant
+        courant = suivant
+    courant[cles[-1]] = valeur
