@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -99,6 +100,72 @@ def _url_cible(href: str) -> str | None:
     parametres = parse_qs(urlparse(href).query)
     cible = parametres.get("uddg", [None])[0]
     return unquote(cible) if cible else None
+
+
+@dataclass
+class MentionWeb:
+    """Une page du web ouvert où la valeur recherchée apparaît."""
+
+    url: str
+    titre: str
+    extrait: str
+
+    @property
+    def domaine(self) -> str:
+        return urlparse(self.url).netloc.lower()
+
+
+def rechercher_mentions(requete: str, nb_max: int = 10) -> list[MentionWeb]:
+    """Pages mentionnant la valeur recherchée, sans exiger que ce soit un profil.
+
+    Complète `SourceRechercheWeb`, qui ne retient que les pages de profil. Cette
+    exigence a du sens pour un pseudonyme — un pseudonyme désigne un compte — mais
+    aucun pour un numéro de téléphone, une adresse postale ou un nom : là, toute page
+    qui mentionne la valeur est une piste (annuaire professionnel, petite annonce,
+    page d'entreprise, forum).
+
+    Ces résultats ne sont donc **jamais** enregistrés comme des comptes, mais comme
+    des liens rattachés au point de départ : dire « ce numéro apparaît sur cette page »
+    est exact, alors que « cette personne possède un compte ici » ne le serait pas.
+    """
+    if not requete.strip():
+        return []
+    if not bool(config_metier().obtenir("recherche_web.actif", True)):
+        return []
+
+    client = ClientHttp()
+    try:
+        reponse = client.obtenir(URL_RECHERCHE, parametres_requete={"q": requete})
+    except (ErreurReseau, DebitDepasse) as exc:
+        journal.info("Recherche de mentions impossible pour « %s » : %s", requete[:60], exc)
+        return []
+    if reponse.status_code >= 400:
+        journal.info("DuckDuckGo a répondu %d pour « %s »", reponse.status_code, requete[:60])
+        return []
+
+    analyseur = _AnalyseurResultatsDuckDuckGo()
+    analyseur.feed(reponse.text)
+
+    mentions: list[MentionWeb] = []
+    vues: set[str] = set()
+    for item in analyseur.resultats:
+        if len(mentions) >= nb_max:
+            break
+        url = _url_cible(item["href"])
+        if not url:
+            continue
+        cle = url.rstrip("/").lower()
+        if cle in vues:
+            continue
+        vues.add(cle)
+        mentions.append(
+            MentionWeb(
+                url=url,
+                titre=_texte_normalise(item["titre"])[:200],
+                extrait=_texte_normalise(item["extrait"])[:500],
+            )
+        )
+    return mentions
 
 
 class SourceRechercheWeb(SourceComplementaire):

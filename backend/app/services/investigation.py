@@ -214,7 +214,11 @@ CORRESPONDANCE_IDS_MAIGRET = {
     "location": TypeDonnee.LOCALISATION,
     "email": TypeDonnee.EMAIL,
     "follower_count": TypeDonnee.NB_ABONNES,
-    "gravatar_email_md5_hash": TypeDonnee.EMAIL,
+    # `gravatar_email_md5_hash` est volontairement absent : c'est une **empreinte**
+    # de l'adresse, pas l'adresse. L'enregistrer comme EMAIL affichait à l'analyste
+    # « 690495313b377cd5578c2d0f8cb314ee » dans la colonne des adresses électroniques
+    # — une donnée fausse, non réversible, et qui échouait de toute façon au rebond
+    # faute de « @ ». Constaté le 01/08/2026.
 }
 
 
@@ -643,8 +647,11 @@ def marquer_donnees_pivotees(session: Session, identifiants: list[str]) -> None:
 
 
 def detecteur_pour(session: Session, investigation: Investigation, deja_explorees: set[str]) -> DetecteurPivot:
-    del session, investigation  # signature homogène avec les autres fabriques du service
-    return DetecteurPivot(valeurs_deja_explorees=deja_explorees)
+    del session  # signature homogène avec les autres fabriques du service
+    return DetecteurPivot(
+        valeurs_deja_explorees=deja_explorees,
+        pseudos_reference=[investigation.pseudo_initial, *(investigation.variantes or [])],
+    )
 
 
 def relier_pivot_dans_graphe(

@@ -65,7 +65,14 @@ def detecter_et_pivoter(investigation_id: str, profondeur_source: int = 0) -> di
             return {"statut": "non_autorise"}
 
         orchestrateur = OrchestrateurPivot(session, investigation, organisation, plan)
-        detecteur = DetecteurPivot(valeurs_deja_explorees=orchestrateur.valeurs_deja_explorees())
+        detecteur = DetecteurPivot(
+            valeurs_deja_explorees=orchestrateur.valeurs_deja_explorees(),
+            # Permet d'écarter les noms affichés qui désignent manifestement
+            # quelqu'un d'autre (homonymes sur des faux positifs).
+            pseudos_reference=[
+                investigation.pseudo_initial, *(investigation.variantes or [])
+            ],
+        )
 
         candidates = collecter_donnees_pivotables(session, investigation, score_minimal)
         pivots = detecteur.detecter(candidates)

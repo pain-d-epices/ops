@@ -55,16 +55,59 @@ class ChercheurAdresse(Chercheur):
             return resultat
 
         if rappel:
-            rappel(1, 2, "Normalisation de l'adresse")
+            rappel(1, 3, "Normalisation de l'adresse")
 
         trouvee = self._chercher_ban(adresse, resultat)
         if not trouvee:
             self._chercher_nominatim(adresse, resultat)
 
+        # La normalisation seule n'apprend rien à un analyste : il connaît déjà
+        # l'adresse qu'il vient de saisir. La valeur d'enquête vient des pages qui la
+        # mentionnent — annuaires professionnels, sièges sociaux, petites annonces.
         if rappel:
-            rappel(2, 2, "Recherche par adresse terminée")
+            rappel(2, 3, "Recherche de l'adresse sur le web")
+        self._chercher_mentions(adresse, resultat)
+
+        if rappel:
+            rappel(3, 3, "Recherche par adresse terminée")
         resultat.duree_secondes = round(time.monotonic() - debut, 2)
         return resultat
+
+    def _chercher_mentions(self, adresse: str, resultat: ResultatChercheur) -> None:
+        """Pages du web ouvert où cette adresse apparaît.
+
+        La forme normalisée est préférée à la saisie brute quand elle existe : c'est
+        sous cette graphie que les annuaires publient une adresse, et la chercher
+        telle que l'analyste l'a tapée manquerait la plupart des pages.
+        """
+        from app.moteur.sources.duckduckgo import rechercher_mentions
+
+        if not config_metier().obtenir("adresse.recherche_web", True):
+            return
+
+        libelles = resultat.valeurs_information(TypeDonnee.LOCALISATION)
+        # Le premier libellé est l'adresse complète normalisée ; les suivants sont la
+        # ville et le département, trop génériques pour être cherchés tels quels.
+        requete = libelles[0] if libelles else adresse
+
+        nb_max = int(config_metier().obtenir("adresse.mentions_max", 8))
+        # Sans guillemets : `lite.duckduckgo.com` renvoie zéro résultat sur une
+        # expression entre guillemets, là où la même requête libre en renvoie six
+        # (mesuré le 01/08/2026). L'adresse complète est assez discriminante pour
+        # que la recherche libre suffise.
+        mentions = rechercher_mentions(requete, nb_max=nb_max)
+        for mention in mentions:
+            resultat.ajouter_information(
+                TypeDonnee.LIEN_EXTERNE,
+                mention.url,
+                confiance=0.5,   # une mention n'établit aucun lien avec une personne
+                source="page mentionnant l'adresse",
+                titre=mention.titre,
+                extrait=mention.extrait,
+            )
+        if mentions:
+            resultat.nb_sources_consultees += 1
+            journal.info("%d page(s) mentionnant l'adresse trouvée(s)", len(mentions))
 
     def _chercher_ban(self, adresse: str, resultat: ResultatChercheur) -> bool:
         """Base Adresse Nationale : précise, gratuite, sans clé, pour la France."""

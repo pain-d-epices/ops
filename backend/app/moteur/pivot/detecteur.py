@@ -80,10 +80,19 @@ def pseudo_exploitable(pseudo: str) -> bool:
 class DetecteurPivot:
     """Transforme des données extraites en pivots candidats."""
 
-    def __init__(self, valeurs_deja_explorees: set[str] | None = None):
+    def __init__(
+        self,
+        valeurs_deja_explorees: set[str] | None = None,
+        pseudos_reference: list[str] | None = None,
+    ):
         # Anti-cycle : « john » trouve un email qui redonne « john ». Sans cette
         # mémoire, l'investigation tournerait en boucle jusqu'à épuisement des quotas.
         self.deja_explorees = valeurs_deja_explorees or set()
+        #: Pseudonymes sur lesquels porte l'investigation. Servent à écarter les noms
+        #: qui n'ont manifestement aucun rapport avec la cible (voir `_pivot_nom`).
+        self.pseudos_reference = [
+            normaliser_pseudo(p) for p in (pseudos_reference or []) if p and p.strip()
+        ]
         conf = config_metier().section("pivot")
         self.types_pivotables: dict[str, str] = conf.get("types_pivotables", {}) or {}
 
@@ -118,7 +127,7 @@ class DetecteurPivot:
             return self._pivot_email(donnee)
         if donnee.type == TypeDonnee.LIEN_EXTERNE.value:
             return self._pivot_lien(donnee)
-        if donnee.type == TypeDonnee.NOM_REEL.value:
+        if donnee.type in (TypeDonnee.NOM_REEL.value, TypeDonnee.NOM_AFFICHE.value):
             return self._pivot_nom(donnee)
         return None
 
@@ -188,10 +197,14 @@ class DetecteurPivot:
         )
 
     def _pivot_nom(self, donnee: DonneeCandidate) -> Pivot | None:
-        """Un nom réel ne devient un pivot que sous une forme de pseudonyme plausible.
+        """Un nom ne devient un pivot que sous une forme de pseudonyme plausible.
 
         Rechercher « Jean Martin » sur 500 sites ne donnerait que du bruit : seule
         une graphie compacte (« jeanmartin ») a une chance de correspondre à un compte.
+
+        S'applique au nom réel comme au nom affiché. L'exigence de deux mots écarte
+        d'elle-même les noms affichés qui ne sont que des prénoms ou des pseudonymes
+        déjà connus (« Nicolas », « ken ») : seule une identité complète est retenue.
         """
         nom = donnee.valeur.strip()
         if len(nom.split()) < 2:
@@ -200,8 +213,23 @@ class DetecteurPivot:
         if not pseudo_exploitable(compact) or len(compact) < 5:
             return None
 
+        # Un nom qui ne partage aucune racine avec ce qu'on recherche désigne
+        # vraisemblablement quelqu'un d'autre : c'est le nom affiché d'un compte
+        # homonyme, donc d'un faux positif. Mesuré le 01/08/2026 sur « torvalds » :
+        # « Marco Migozzi » déclenchait une recherche complète sans le moindre rapport
+        # avec la cible, là où « Linus Torvalds » et « Patricia Torvalds » étaient
+        # deux pistes légitimes.
+        if self.pseudos_reference and not any(
+            reference in compact or compact in reference
+            for reference in self.pseudos_reference
+        ):
+            return None
+
         return Pivot(
-            type_pivot=TypeDonnee.NOM_REEL.value,
+            # Le type d'origine est conservé : l'analyste doit pouvoir distinguer un
+            # rebond parti d'un nom déclaré comme réel d'un rebond parti d'un simple
+            # nom d'affichage, dont la fiabilité n'est pas la même.
+            type_pivot=donnee.type,
             valeur=compact,
             valeur_normalisee=compact,
             action=ACTION_RECHERCHE,

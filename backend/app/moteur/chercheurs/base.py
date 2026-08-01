@@ -58,6 +58,10 @@ class ResultatChercheur:
     def reussie(self) -> bool:
         return self.erreur is None
 
+    def valeurs_information(self, type_donnee: TypeDonnee) -> list[str]:
+        """Valeurs déjà collectées pour ce type, dans leur ordre d'ajout."""
+        return [i.valeur for i in self.informations if i.type == type_donnee]
+
     def ajouter_information(
         self, type_donnee: TypeDonnee, valeur: Any, confiance: float = 1.0, **meta: Any
     ) -> None:

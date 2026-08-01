@@ -80,6 +80,15 @@ pivot:
     email: recherche_email
     lien_externe: enrichissement_direct
     nom_reel: recherche_maigret
+    # Le nom affiché est de très loin le champ le mieux rempli : presque tous les
+    # modules le renseignent, alors que `nom_reel` n'est produit que par Gravatar.
+    # L'omettre réduisait la portée du rebond bien plus que ne le laissait croire la
+    # présence de `nom_reel` — mesuré le 01/08/2026 : sur une investigation de 26
+    # comptes, 13 noms affichés étaient disponibles et aucun n'était exploité.
+    # Les garde-fous de `_pivot_nom` s'appliquent (deux mots minimum, graphie
+    # compacte plausible, confiance réduite de 40 %) : « Linus Torvalds » devient une
+    # recherche sur « linustorvalds », « Nicolas » seul est ignoré.
+    nom_affiche: recherche_maigret
 
 # --- Maigret ----------------------------------------------------------------
 maigret:
@@ -126,12 +135,23 @@ user_scanner:
 telephone:
   # Pays supposé pour les numéros saisis sans indicatif international
   pays_defaut: "FR"
+  # Chercher le numéro sur le web ouvert. C'est ce qui relie un numéro à un nom, une
+  # société ou une adresse : les données de libphonenumber (opérateur, région, type
+  # de ligne) ne désignent personne à elles seules.
+  # Le numéro est cherché sous ses graphies internationale ET nationale : un même
+  # numéro s'écrit « +33 1 84 94 40 00 » ici et « 01 84 94 40 00 » là.
+  recherche_web: true
+  mentions_max: 8
 
 # --- Recherche par adresse postale -------------------------------------------
 adresse:
   # Interroger d'abord la Base Adresse Nationale (France, plus précise et sans
   # limite contraignante), puis Nominatim en repli pour le reste du monde.
   utiliser_ban: true
+  # Chercher l'adresse normalisée sur le web ouvert. Sans cela, la recherche par
+  # adresse ne fait que renvoyer à l'analyste ce qu'il vient de saisir.
+  recherche_web: true
+  mentions_max: 8
 
 # --- Sources complémentaires : recherche web et dark web ---------------------
 # Complètent Maigret pour le même pseudonyme (voir app/moteur/sources/). Fonctionnalité

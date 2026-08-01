@@ -14,19 +14,22 @@ marchait pas, et ce qui a été corrigé.
 
 | | |
 |---|---|
-| Fonctionnalités testées | 24 |
-| Fonctionnent correctement | 18 |
-| Défauts trouvés | **6** (dont 3 sérieux) |
-| Défauts corrigés et **revérifiés en réel** | **6 / 6** |
-| Tests automatisés | 188 → **203** au vert |
+| Fonctionnalités testées | 27 |
+| Défauts trouvés | **12** (dont 6 graves) |
+| Défauts corrigés et **revérifiés en réel** | **12 / 12** |
+| Tests automatisés | 188 → **221** au vert |
 
-Mesures avant / après correction, sur la même cible et le même périmètre :
+Mesures avant / après correction, sur les mêmes cibles et le même périmètre :
 
 | | Avant | Après |
 |---|---|---|
 | Faux comptes injectés par la recherche web | 11 sur 36 | **0** |
+| Faux compte injecté par la recherche téléphone | 1 (YouTube inexistant) | **0** |
 | Compte GitHub en double | oui | **non** |
 | Recherche par adresse électronique | 733 s, 0 donnée | **140 s, 121 données** |
+| Recherche par téléphone | métadonnées seules | **identifie le Musée du Louvre** |
+| Recherche par adresse postale | l'adresse saisie | **identifie l'agence BNP à cette adresse** |
+| Rebond (mode automatique, profondeur 1) | 1 recherche, 0 rebond | **5 recherches, 58 comptes** |
 | Nœuds « localisation » pour « Portland, OR » | 9 (un par lettre) | **1** |
 | Connexion PostgreSQL retenue pendant l'appel réseau | 733 s | **non retenue** |
 
@@ -255,15 +258,110 @@ hors bornes.
 
 ---
 
-## 5. Ce qui n'a pas pu être testé
+## 5. Deuxième passe : téléphone, adresse et rebond
 
-- **Rebond (pivot)** en conditions réelles : les recherches de contrôle ont été
-  lancées à profondeur 0 pour rester mesurables. Le mécanisme reste couvert par les
-  tests automatisés (`test_cycle_investigation.py`).
+Ces trois fonctionnalités n'avaient pas pu être mesurées lors de la première passe.
+Testées ensuite en conditions réelles, elles se sont révélées **inexploitables en
+l'état** — trois défauts supplémentaires, corrigés et revérifiés.
+
+### 🔴 Grave — La recherche par téléphone fabriquait de faux comptes
+
+**Constat.** Une recherche sur `+33184944000` produisait un compte
+`https://youtube.com/@+33184944000`. Un identifiant YouTube ne peut pas contenir de
+« + » : ce compte n'existe pas.
+
+**Cause.** `user-scanner` était appelé en mode **nom d'utilisateur** avec le numéro.
+Or un numéro de téléphone n'est pas un nom d'utilisateur.
+
+**Conséquence.** L'outil affirmait à l'analyste que la cible possédait un compte
+inexistant. Pour un outil dont la sortie sert à identifier des personnes réelles,
+c'est le défaut le plus grave possible.
+
+**Correction.** `user-scanner` retiré de ce chercheur. **Vérifié** : plus aucun
+compte produit par une recherche téléphone.
+
+### 🔴 La recherche par téléphone ne cherchait nulle part
+
+**Constat.** Une fois le faux compte retiré, il ne restait que l'opérateur et la
+région — des métadonnées déductibles du numéro, qui ne désignent personne.
+
+**Correction.** Recherche du numéro sur le web ouvert, avec deux enseignements tirés
+de la mesure :
+
+- **le format compact est le seul qui fonctionne.** Cherché `0140205050`, le numéro
+  du Louvre remonte l'annuaire inversé, Infobel et `contact.louvre.fr`. Cherché
+  `01 40 20 50 50`, le moteur traite les groupes comme des mots séparés et renvoie
+  des calculatrices ;
+- **les guillemets font échouer la requête** : `lite.duckduckgo.com` renvoie zéro
+  résultat sur une expression entre guillemets.
+
+Les annuaires inversés génériques (Truecaller, Tellows, RoboKiller…) sont écartés :
+ils publient une page pour *tout* numéro, y compris inexistant.
+
+**Vérifié en réel** : `+33140205050` est correctement identifié comme le **Musée du
+Louvre**, avec le site officiel `contact.louvre.fr` en piste.
+
+### 🟠 La recherche par adresse ne rapportait rien
+
+**Constat.** Elle renvoyait l'adresse normalisée, la ville et les coordonnées — soit
+ce que l'analyste venait de saisir.
+
+**Correction.** Recherche de l'adresse normalisée sur le web ouvert.
+
+**Vérifié en réel** sur `10 rue de Rivoli 75004 Paris` : l'outil identifie une
+**agence BNP Paribas** et un magasin **Søstrene Grene** à cette adresse, avec les
+pages PagesJaunes et Cylex correspondantes.
+
+### 🔴 Grave — Le rebond ne se déclenchait jamais
+
+**Constat.** Une investigation en mode automatique, profondeur 1, plan pro :
+**1 seule recherche, 0 proposition de rebond**, alors que 26 comptes avaient été
+trouvés et 71 données extraites.
+
+**Cause.** Seul `nom_reel` était déclaré pivotable, or ce champ n'est renseigné que
+par Gravatar. `nom_affiche` — renseigné par presque tous les modules, 13 fois dans
+cette investigation — n'était jamais exploité. Tous les autres candidats étaient soit
+le pseudonyme initial (correctement bloqué par l'anti-cycle), soit sous le seuil de
+score.
+
+**Conséquence.** Le rebond, fonctionnalité payante mise en avant à tous les paliers
+supérieurs, restait inerte dans le cas le plus courant.
+
+**Correction.** `nom_affiche` devient pivotable, avec les garde-fous existants (deux
+mots minimum, graphie compacte plausible, confiance réduite de 40 %).
+
+**Vérifié en réel** : **5 recherches enchaînées au lieu d'1, 58 comptes au lieu de
+26**, avec des comptes trouvés au niveau 2. Le rebond découvre `linustorvalds` et
+remonte ainsi GitLab, YouTube, Flickr et Tumblr — que la recherche initiale sur
+`torvalds` ne voyait pas. Il découvre également `patriciatorvalds`, et avec elle des
+comptes Instagram et Facebook : un lien familial que la recherche initiale ne pouvait
+pas voir.
+
+### 🟠 Précision du rebond : les homonymes déclenchaient des recherches
+
+**Constat.** Parmi les 5 rebonds proposés, `marcomigozzi` — une personne sans aucun
+rapport, nom affiché d'un compte homonyme faussement rattaché.
+
+**Correction.** Un nom ne devient un rebond que s'il partage une racine avec ce qui
+est recherché. « Linus Torvalds » et « Patricia Torvalds » restent des pistes
+légitimes ; « Marco Migozzi » est écarté.
+
+**Vérifié en réel** : le rebond sans rapport a disparu, les quatre restants portent
+tous sur la cible ou son entourage.
+
+### 🟠 Un hash affiché comme adresse électronique
+
+`gravatar_email_md5_hash` était enregistré comme EMAIL : l'analyste voyait
+`690495313b377cd5578c2d0f8cb314ee` dans la colonne des adresses. Une empreinte n'est
+pas une adresse, et elle n'est pas réversible. Le rapprochement est supprimé.
+
+---
+
+## 6. Ce qui n'a pas pu être testé
+
 - **Paiement Stripe réel** : aucun compte Stripe n'existe encore (décision connue).
-- **Recherches par téléphone et adresse postale** : lancées, mais le banc de test est
-  tombé sur une réponse inattendue avant de recueillir la mesure. Elles restent
-  couvertes par les tests automatisés.
+- **Recherche dark web** : voir les points de vigilance ci-dessus — Ahmia n'a rien
+  renvoyé d'exploitable sur les cibles testées.
 
 ---
 
