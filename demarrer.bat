@@ -57,12 +57,12 @@ goto attente_postgres
 echo       PostgreSQL est pret.
 
 echo [3/5] Demarrage de l'API (nouvelle fenetre)...
-start "Searcher - API backend" cmd /k "cd /d "%~dp0backend" && set PYTHONIOENCODING=utf-8 && .venv\Scripts\python -m uvicorn app.main:app --port 8000 --reload"
+start "Searcher - API backend" cmd /k "cd /d "%~dp0backend" && set PYTHONIOENCODING=utf-8 && .venv\Scripts\python -m uvicorn app.main:app --port 8010 --reload"
 
 echo       Attente que l'API reponde...
 set /a essais=0
 :attente_api
-curl --fail -s -o nul -m 2 http://localhost:8000/api/sante >nul 2>&1
+curl --fail -s -o nul -m 2 http://localhost:8010/api/sante >nul 2>&1
 if not errorlevel 1 goto api_prete
 set /a essais+=1
 if %essais% geq 60 (
@@ -84,7 +84,7 @@ start "Searcher - Interface web" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 echo       Attente que l'interface reponde...
 set /a essais=0
 :attente_front
-curl --fail -s -o nul -m 3 http://localhost:5173/ >nul 2>&1
+curl --fail -s -o nul -m 3 http://localhost:5183/ >nul 2>&1
 if not errorlevel 1 goto front_prete
 set /a essais+=1
 if %essais% geq 90 (
@@ -100,13 +100,13 @@ goto attente_front
 REM Une premiere requete force Vite a preparer le code de l'application : sans
 REM elle, ce travail se ferait pendant que vous regardez une page blanche.
 echo       Preparation du code de l'interface...
-curl --fail -s -o nul -m 60 http://localhost:5173/src/main.tsx >nul 2>&1
+curl --fail -s -o nul -m 60 http://localhost:5183/src/main.tsx >nul 2>&1
 echo       L'interface est prete.
 
 echo [5/5] Demarrage du worker de taches (nouvelle fenetre)...
 start "Searcher - Worker (recherche, enrichissement, pivot)" cmd /k "cd /d "%~dp0backend" && set PYTHONIOENCODING=utf-8 && .venv\Scripts\python -m celery -A app.taches.celery_app worker -Q recherche,enrichissement,pivot,maintenance --pool=solo --loglevel=info"
 
-start "" "http://localhost:5173"
+start "" "http://localhost:5183"
 
 echo.
 echo ============================================

@@ -21,7 +21,7 @@ export default defineConfig({
     ],
   },
   server: {
-    port: 5173,
+    port: 5183,
     // Traduit ces fichiers dès le démarrage, sans attendre la première visite.
     warmup: {
       clientFiles: [
@@ -33,11 +33,11 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://localhost:8010",
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://localhost:8000",
+        target: "ws://localhost:8010",
         ws: true,
         changeOrigin: true,
       },

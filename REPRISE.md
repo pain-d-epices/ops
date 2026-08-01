@@ -60,7 +60,7 @@ tard). La logique de traitement des webhooks (activation, résiliation, dédupli
 est vérifiée par les tests automatisés, en contournant la vérification de signature.
 Avant la première vente : créer le compte Stripe, les prix, l'endpoint de webhook
 (voir « Facturation via Stripe » dans le [README](README.md)), puis faire un paiement
-de test avec `stripe listen --forward-to localhost:8000/api/v1/stripe/webhook`.
+de test avec `stripe listen --forward-to localhost:8010/api/v1/stripe/webhook`.
 
 172 tests automatisés au vert (154 avant ce chantier + 18 nouveaux : export PDF,
 TOTP, traitement des webhooks Stripe).
@@ -326,7 +326,7 @@ cd backend && .venv/Scripts/python -m celery -A app.taches.celery_app worker -Q 
 cd frontend && npm run dev
 ```
 
-Interface sur http://localhost:5173
+Interface sur http://localhost:5183
 
 > Sous Windows, `--pool=solo` est indispensable pour Celery.
 >

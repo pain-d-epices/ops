@@ -31,19 +31,19 @@ class Parametres(BaseSettings):
     # --- Général ---
     environnement: str = "developpement"
     debug: bool = True
-    origines_autorisees: str = "http://localhost:5173"
+    origines_autorisees: str = "http://localhost:5183"
 
     # --- Base de données ---
     postgres_utilisateur: str = "searcher"
     postgres_mot_de_passe: str = "searcher"
     postgres_base: str = "searcher"
     postgres_hote: str = "localhost"
-    postgres_port: int = 5432
+    postgres_port: int = 5442
     # Renseigner cette variable court-circuite les cinq précédentes (utile pour les tests SQLite)
     url_base_de_donnees: str | None = None
 
     # --- Redis ---
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://localhost:6389/0"
 
     # --- Sécurité ---
     cle_secrete: str = "cle_de_developpement_a_ne_jamais_utiliser_en_production"
@@ -53,9 +53,9 @@ class Parametres(BaseSettings):
     # --- Stripe (facturation) ---
     stripe_cle_secrete: str = ""             # sk_test_... ou sk_live_...
     stripe_webhook_secret: str = ""          # whsec_..., depuis le tableau de bord Stripe
-    stripe_url_retour_succes: str = "http://localhost:5173/abonnement?paiement=succes"
-    stripe_url_retour_annulation: str = "http://localhost:5173/abonnement?paiement=annule"
-    stripe_url_retour_portail: str = "http://localhost:5173/abonnement"
+    stripe_url_retour_succes: str = "http://localhost:5183/abonnement?paiement=succes"
+    stripe_url_retour_annulation: str = "http://localhost:5183/abonnement?paiement=annule"
+    stripe_url_retour_portail: str = "http://localhost:5183/abonnement"
     # Correspondance entre identifiants de prix Stripe et codes de plan internes,
     # utilisée en repli si la colonne `plans.stripe_price_id` n'est pas renseignée.
     # Format : id_prix_stripe:code_plan,id_prix_stripe:code_plan
