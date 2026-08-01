@@ -1,9 +1,9 @@
 {
-  "name": "searcher-frontend",
+  "name": "ops-frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Interface web du SaaS OSINT Searcher",
+  "description": "Interface web du SaaS OSINT Ops",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

@@ -91,7 +91,7 @@ export function PageInscription() {
       <div className="boite-auth">
         <div className="entete-auth">
           <div className="marque">
-            <span className="marque-logo">◎</span> Searcher
+            <span className="marque-logo">◎</span> Ops
           </div>
           <p>
             {jetonInvitation
@@ -171,7 +171,7 @@ export function PageInscription() {
           <div className="encart-cgu">
             <strong>Conditions d'utilisation</strong>
             <p style={{ margin: "8px 0 0" }}>
-              Searcher traite des données personnelles de tiers qui n'ont pas consenti à
+              Ops traite des données personnelles de tiers qui n'ont pas consenti à
               leur collecte. Son utilisation n'est licite que dans un cadre légitime :
               enquête autorisée, journalisme d'investigation, sécurité défensive, ou
               vérification avec le consentement de la personne concernée.

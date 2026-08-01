@@ -22,7 +22,7 @@ export function MiseEnPage({ children }: { children: ReactNode }) {
       <header className="entete">
         <div className="ligne" style={{ gap: 26 }}>
           <NavLink to="/" className="marque">
-            <span className="marque-logo">◎</span> Searcher
+            <span className="marque-logo">◎</span> Ops
           </NavLink>
           <nav className="navigation">
             <NavLink to="/" end className={({ isActive }) => (isActive ? "actif" : "")}>

@@ -20,7 +20,10 @@ import {
 import { definirOrganisationActive, useMoi } from "../api/hooks";
 import type { OrganisationResumee, Utilisateur } from "../api/types";
 
-const CLE_ORGANISATION = "searcher.organisation";
+// Clé de stockage local. Renommée avec le produit (Searcher → Ops) : les
+// navigateurs qui portent encore l'ancienne clé repartiront simplement sur
+// l'organisation par défaut, sans erreur.
+const CLE_ORGANISATION = "ops.organisation";
 
 interface ValeurAuth {
   utilisateur: Utilisateur | null;
