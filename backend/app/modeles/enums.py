@@ -133,6 +133,7 @@ class ActionJournal(str, Enum):
     TOTP_ACTIVE = "auth.totp_active"
     TOTP_DESACTIVE = "auth.totp_desactive"
     INVESTIGATION_CREEE = "investigation.creee"
+    INVESTIGATION_ANNULEE = "investigation.annulee"
     INVESTIGATION_SUPPRIMEE = "investigation.supprimee"
     ENRICHISSEMENT_LANCE = "enrichissement.lance"
     PIVOT_LANCE = "pivot.lance"

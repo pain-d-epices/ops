@@ -116,6 +116,9 @@ class ResultatRecherche:
     duree_secondes: float = 0.0
     erreur: str | None = None
     code_retour: int | None = None
+    #: Vrai si la recherche a été arrêtée à la demande de l'utilisateur. À distinguer
+    #: d'une erreur : les comptes déjà trouvés restent exploitables.
+    interrompu: bool = False
 
     @property
     def reussie(self) -> bool:
@@ -129,6 +132,15 @@ class ResultatRecherche:
 # Signature du rappel de progression : (sites_scannes, sites_total, message)
 RappelProgression = Callable[[int, int, str], None]
 
+#: Fonction consultée périodiquement pendant la recherche : si elle renvoie True, le
+#: sous-processus Maigret est arrêté. Permet à l'utilisateur d'interrompre une
+#: recherche longue sans attendre son terme (voir `app/moteur/annulation.py`).
+DemandeArret = Callable[[], bool]
+
+#: Intervalle entre deux consultations du drapeau d'arrêt, en secondes. Une seconde
+#: donne une interruption perçue comme immédiate sans interroger le cache inutilement.
+INTERVALLE_SURVEILLANCE_ARRET = 1.0
+
 
 class RunnerMaigret(ABC):
     """Interface commune, pour pouvoir substituer un faux runner dans les tests."""
@@ -139,6 +151,7 @@ class RunnerMaigret(ABC):
         pseudo: str,
         options: OptionsRecherche | None = None,
         rappel: RappelProgression | None = None,
+        doit_arreter: DemandeArret | None = None,
     ) -> ResultatRecherche: ...
 
 
@@ -189,6 +202,7 @@ class RunnerMaigretSousProcessus(RunnerMaigret):
         pseudo: str,
         options: OptionsRecherche | None = None,
         rappel: RappelProgression | None = None,
+        doit_arreter: DemandeArret | None = None,
     ) -> ResultatRecherche:
         options = options or OptionsRecherche.depuis_config()
         resultat = ResultatRecherche(pseudo=pseudo)
@@ -217,6 +231,16 @@ class RunnerMaigretSousProcessus(RunnerMaigret):
             )
             suiveur.start()
 
+            arret_demande = threading.Event()
+            surveillant: threading.Thread | None = None
+            if doit_arreter is not None:
+                surveillant = threading.Thread(
+                    target=self._surveiller_arret,
+                    args=(processus, doit_arreter, arret_demande),
+                    daemon=True,
+                )
+                surveillant.start()
+
             try:
                 processus.communicate(timeout=options.timeout_global)
             except subprocess.TimeoutExpired:
@@ -230,13 +254,28 @@ class RunnerMaigretSousProcessus(RunnerMaigret):
 
             resultat.code_retour = processus.returncode
             suiveur.join(timeout=2)
+            if surveillant is not None:
+                arret_demande.set()   # débloque la surveillance si le processus a fini seul
+                surveillant.join(timeout=2)
+
+            # L'arrêt demandé prime sur le reste : le code de retour d'un processus
+            # tué n'a aucun sens, et les résultats partiels déjà écrits sont conservés.
+            if doit_arreter is not None and doit_arreter():
+                resultat.interrompu = True
+                resultat.erreur = "Recherche interrompue à la demande de l'utilisateur."
+                journal.info("Maigret interrompu sur demande pour « %s »", pseudo)
 
             # Le code de retour de Maigret n'est pas fiable (il renvoie parfois une
             # valeur non nulle malgré une recherche complète). C'est la présence du
             # rapport qui fait foi.
             sites = self._lire_rapports(dossier_sortie, pseudo)
             resultat.sites = self._filtrer_exclusions(sites, options.sites_exclus)
-            if not sites and resultat.erreur is None and processus.returncode not in (0, None):
+            if (
+                not sites
+                and resultat.erreur is None
+                and not resultat.interrompu
+                and processus.returncode not in (0, None)
+            ):
                 resultat.erreur = f"Maigret a échoué (code {processus.returncode})."
 
         except FileNotFoundError as exc:
@@ -253,6 +292,38 @@ class RunnerMaigretSousProcessus(RunnerMaigret):
             resultat.nb_sites_total = options.top_sites
         resultat.nb_sites_scannes = max(resultat.nb_sites_scannes, len(resultat.sites))
         return resultat
+
+    @staticmethod
+    def _surveiller_arret(
+        processus: subprocess.Popen,
+        doit_arreter: DemandeArret,
+        arret_demande: threading.Event,
+    ) -> None:
+        """Tue le sous-processus dès que l'arrêt est demandé.
+
+        Sans cela, annuler une recherche n'aurait aucun effet visible avant la fin de
+        Maigret — jusqu'à trente minutes sur une recherche complète.
+
+        `Event.wait` sert de temporisation interruptible : quand la recherche se
+        termine d'elle-même, l'appelant lève l'événement et ce fil s'arrête aussitôt,
+        au lieu de survivre jusqu'à la seconde suivante.
+        """
+        while not arret_demande.wait(INTERVALLE_SURVEILLANCE_ARRET):
+            if processus.poll() is not None:
+                return   # le processus s'est terminé de lui-même
+            try:
+                if not doit_arreter():
+                    continue
+            except Exception:  # noqa: BLE001 — un drapeau illisible ne doit rien casser
+                journal.debug("Consultation du drapeau d'arrêt en échec", exc_info=True)
+                continue
+
+            journal.info("Arrêt demandé : le sous-processus Maigret est terminé.")
+            try:
+                processus.kill()
+            except Exception:  # noqa: BLE001 — course avec la fin naturelle du processus
+                journal.debug("Le sous-processus était déjà terminé", exc_info=True)
+            return
 
     def _suivre_progression(
         self,
@@ -384,8 +455,16 @@ class RunnerMaigretFactice(RunnerMaigret):
         pseudo: str,
         options: OptionsRecherche | None = None,
         rappel: RappelProgression | None = None,
+        doit_arreter: DemandeArret | None = None,
     ) -> ResultatRecherche:
         self.appels.append(pseudo)
+        # Un arrêt déjà demandé au lancement doit être respecté : c'est le cas d'une
+        # annulation intervenue pendant l'attente en file.
+        if doit_arreter is not None and doit_arreter():
+            return ResultatRecherche(
+                pseudo=pseudo, interrompu=True,
+                erreur="Recherche interrompue à la demande de l'utilisateur.",
+            )
         sites = self.resultats.get(pseudo, [])
         if rappel:
             rappel(len(sites), max(len(sites), 1), "recherche factice terminée")

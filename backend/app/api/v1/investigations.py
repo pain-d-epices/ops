@@ -402,6 +402,68 @@ def obtenir_investigation(
     return _detail(ctx, _recuperer(ctx, investigation_id))
 
 
+@routeur.post("/{investigation_id}/annuler", response_model=InvestigationDetaillee)
+def annuler_investigation(
+    investigation_id: str,
+    requete: Request,
+    ctx: ContexteRequete = Depends(exiger_role(RoleMembre.ANALYSTE.value)),
+) -> InvestigationDetaillee:
+    """Arrête une investigation en cours, en conservant ce qu'elle a déjà trouvé.
+
+    L'arrêt est **coopératif** : le statut passé en base est consulté par chaque
+    étape du cycle, qui s'interrompt à son prochain point de reprise plutôt que
+    d'être tuée en plein travail (voir `app/moteur/annulation.py`). La recherche
+    Maigret en cours, elle, est arrêtée en quelques secondes.
+
+    Le quota n'est rendu que si la recherche n'a **rien** trouvé. Rembourser une
+    recherche déjà fructueuse permettrait d'enchaîner « je lance, je récupère les
+    résultats, j'annule, je suis remboursé » — soit un volume gratuit illimité.
+    """
+    from app.moteur.annulation import marquer_annulation
+
+    investigation = _recuperer(ctx, investigation_id)
+
+    if investigation.statut not in (
+        StatutInvestigation.EN_ATTENTE.value,
+        StatutInvestigation.EN_COURS.value,
+    ):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Cette investigation n'est pas en cours (statut : {investigation.statut}).",
+        )
+
+    rien_trouve = investigation.nb_profils_trouves == 0
+
+    investigation.statut = StatutInvestigation.ANNULEE.value
+    investigation.etape_courante = "Arrêtée à votre demande"
+    investigation.terminee_le = maintenant()
+
+    # Les propositions de rebond encore en attente n'ont plus lieu d'être : les
+    # laisser ouvertes proposerait de relancer une investigation arrêtée.
+    ctx.session.query(PropositionPivot).filter(
+        PropositionPivot.investigation_id == investigation.id,
+        PropositionPivot.statut == StatutPropositionPivot.EN_ATTENTE.value,
+    ).update({"statut": StatutPropositionPivot.REFUSEE.value}, synchronize_session=False)
+
+    if rien_trouve:
+        rembourser_quota(ctx.session, ctx.organisation_id, "recherches")
+
+    journaliser(
+        ctx.session, ActionJournal.INVESTIGATION_ANNULEE,
+        organisation_id=ctx.organisation_id, utilisateur_id=ctx.utilisateur.id,
+        email_utilisateur=ctx.utilisateur.email, cible=investigation.pseudo_initial,
+        investigation_id=investigation.id, requete=requete,
+        detail={"quota_rendu": rien_trouve, "profils_conserves": investigation.nb_profils_trouves},
+    )
+    ctx.session.commit()
+
+    # Après le commit seulement : le cache ne doit jamais annoncer une annulation que
+    # la base n'a pas encore enregistrée.
+    marquer_annulation(investigation.id)
+
+    return _detail(ctx, investigation)
+
+
 @routeur.delete("/{investigation_id}", status_code=status.HTTP_204_NO_CONTENT)
 def supprimer_investigation(
     investigation_id: str,

@@ -259,6 +259,25 @@ export function useCreerInvestigation() {
   });
 }
 
+/** Arrête une investigation en cours, en conservant les résultats déjà trouvés. */
+export function useAnnulerInvestigation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      appelerApi<InvestigationDetaillee>(`/investigations/${id}/annuler`, {
+        methode: "POST",
+        ...options(),
+      }),
+    onSuccess: (_, id) => {
+      client.invalidateQueries({ queryKey: cles.investigation(id) });
+      client.invalidateQueries({ queryKey: cles.investigations() });
+      // Le quota est rendu quand la recherche n'a rien trouvé : l'affichage de
+      // consommation doit donc être rafraîchi lui aussi.
+      client.invalidateQueries({ queryKey: cles.abonnement() });
+    },
+  });
+}
+
 export function useSupprimerInvestigation() {
   const client = useQueryClient();
   return useMutation({

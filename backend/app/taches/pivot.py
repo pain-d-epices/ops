@@ -18,6 +18,7 @@ from app.infra.evenements import TypeEvenement, bus
 from app.modeles.enums import TypeDonnee, TypeNoeud
 from app.modeles.investigation import Investigation, PropositionPivot
 from app.modeles.organisation import Organisation
+from app.moteur.annulation import est_annulee
 from app.moteur.pivot.detecteur import ACTION_ENRICHISSEMENT, ACTION_RECHERCHE, DetecteurPivot
 from app.moteur.pivot.orchestrateur import OrchestrateurPivot
 from app.services.investigation import (
@@ -49,6 +50,11 @@ def detecter_et_pivoter(investigation_id: str, profondeur_source: int = 0) -> di
         investigation = session.get(Investigation, investigation_id)
         if investigation is None:
             return {"statut": "introuvable"}
+
+        # Le rebond est l'étape la plus coûteuse (il relance des recherches
+        # complètes) : ne jamais l'engager sur une investigation arrêtée.
+        if est_annulee(investigation_id, session):
+            return {"statut": "annulee"}
 
         organisation = session.get(Organisation, investigation.organisation_id)
         plan = plan_actif(session, investigation.organisation_id)
@@ -137,6 +143,10 @@ def executer_proposition_pivot(investigation_id: str, proposition_id: str) -> di
             # Ne jamais exécuter une proposition appartenant à une autre investigation
             return {"statut": "incoherent"}
 
+        # Un rebond validé puis annulé ne doit pas consommer de quota ni partir.
+        if est_annulee(investigation_id, session):
+            return {"statut": "annulee"}
+
         organisation_id = investigation.organisation_id
         plan = plan_actif(session, organisation_id)
         if not pivot_disponible(plan):
@@ -204,6 +214,9 @@ def enrichir_lien_direct(investigation_id: str, proposition_id: str) -> dict:
         proposition = session.get(PropositionPivot, proposition_id)
         if investigation is None or proposition is None:
             return {"statut": "introuvable"}
+
+        if est_annulee(investigation_id, session):
+            return {"statut": "annulee"}
 
         from app.modeles.investigation import ExecutionRecherche
         from app.modules.registre import module_pour_domaine

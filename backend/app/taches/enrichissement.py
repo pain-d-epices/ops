@@ -17,6 +17,7 @@ from app.facturation.plans import MODULES
 from app.facturation.quotas import QuotaDepasse, consommer_quota
 from app.infra.evenements import TypeEvenement, bus
 from app.modeles.investigation import Investigation
+from app.moteur.annulation import est_annulee
 from app.services.investigation import (
     enregistrer_enrichissement,
     executer_module,
@@ -40,6 +41,10 @@ def enrichir_investigation(investigation_id: str, profondeur: int = 0) -> dict:
             return {"statut": "introuvable"}
 
         organisation_id = investigation.organisation_id
+        # Annulée pendant l'attente en file : ne rien enrichir, ne rien enchaîner.
+        if est_annulee(investigation_id, session):
+            return {"statut": "annulee"}
+
         plan = plan_actif(session, organisation_id)
 
         if not plan.possede(MODULES):
@@ -63,9 +68,16 @@ def enrichir_investigation(investigation_id: str, profondeur: int = 0) -> dict:
 
     from app.modeles.investigation import ProfilIdentite
 
+    annulee = False
     for profil_id in candidats:
         # --- Étape 1 : réserver le quota et lire ce qu'il faut (transaction courte) ---
         with portee_session() as session:
+            # Chaque profil est un appel réseau : point de reprise avant d'engager le
+            # suivant, et avant de consommer un quota qui ne servirait à rien.
+            if est_annulee(investigation_id, session):
+                annulee = True
+                break
+
             profil = session.get(ProfilIdentite, profil_id)
             if profil is None:
                 continue
@@ -111,10 +123,19 @@ def enrichir_investigation(investigation_id: str, profondeur: int = 0) -> dict:
     with portee_session() as session:
         investigation = session.get(Investigation, investigation_id)
         if investigation is not None:
+            # Rescorer même après annulation : les profils enrichis avant l'arrêt
+            # doivent porter un score cohérent.
             rescorer_investigation(session, investigation)
-            investigation.progression = max(investigation.progression, 85)
+            annulee = annulee or est_annulee(investigation_id, session)
+            if not annulee:
+                investigation.progression = max(investigation.progression, 85)
             plan = plan_actif(session, organisation_id)
-            pivot_possible = pivot_disponible(plan) and not quota_epuise
+            pivot_possible = pivot_disponible(plan) and not quota_epuise and not annulee
+
+    if annulee:
+        from app.taches.recherche import _cloturer_annulation
+
+        return _cloturer_annulation(investigation_id, organisation_id)
 
     if pivot_possible:
         from app.taches.pivot import detecter_et_pivoter

@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ErreurApi, telechargerExport } from "../api/client";
 import {
   useAbonnement,
+  useAnnulerInvestigation,
   useGraphe,
   useInvestigation,
   useSupprimerInvestigation,
@@ -62,6 +63,7 @@ export function PageInvestigation() {
   const { data: abonnement } = useAbonnement();
   const exportPdfDisponible = Boolean(abonnement?.plan.fonctionnalites.includes("export_pdf"));
   const supprimer = useSupprimerInvestigation();
+  const annuler = useAnnulerInvestigation();
 
   const noeudCourant = useMemo(
     () => graphe?.noeuds.find((n) => n.id === noeudSelectionne) ?? null,
@@ -91,6 +93,20 @@ export function PageInvestigation() {
       setErreurExport(
         exception instanceof ErreurApi ? exception.message : "Export impossible.",
       );
+    }
+  };
+
+  const arreterInvestigation = async () => {
+    const confirme = window.confirm(
+      "Arrêter cette recherche maintenant ?\n\n" +
+        "Les comptes déjà trouvés sont conservés, mais la recherche ne cherchera " +
+        "pas plus loin. Si elle n'a encore rien trouvé, elle ne vous sera pas décomptée.",
+    );
+    if (!confirme) return;
+    try {
+      await annuler.mutateAsync(investigationId!);
+    } catch {
+      // L'erreur est affichée sous la barre de progression (annuler.isError).
     }
   };
 
@@ -194,10 +210,42 @@ export function PageInvestigation() {
             <span className="mono petit">{progression} %</span>
           </div>
           <BarreProgression valeur={progression} />
-          <div className="petit attenue" style={{ marginTop: 8 }}>
-            La durée dépend du nombre de sites choisi : comptez environ 25 secondes
-            pour 50 sites, 2 minutes pour 500. Vous pouvez quitter cette page, le
-            traitement continue côté serveur.
+          <div className="ligne-espacee" style={{ marginTop: 8, gap: 12 }}>
+            <div className="petit attenue">
+              La durée dépend du nombre de sites choisi : comptez environ 25 secondes
+              pour 50 sites, 2 minutes pour 500. Vous pouvez quitter cette page, le
+              traitement continue côté serveur.
+            </div>
+            <button
+              type="button"
+              className="bouton-petit bouton-danger"
+              onClick={arreterInvestigation}
+              disabled={annuler.isPending}
+              style={{ flexShrink: 0 }}
+            >
+              {annuler.isPending ? "Arrêt en cours…" : "Arrêter la recherche"}
+            </button>
+          </div>
+          {annuler.isError && (
+            <div style={{ marginTop: 10 }}>
+              <MessageErreur>
+                {annuler.error instanceof ErreurApi
+                  ? annuler.error.message
+                  : "L'arrêt n'a pas pu être demandé."}
+              </MessageErreur>
+            </div>
+          )}
+        </div>
+      )}
+
+      {investigation.statut === "annulee" && (
+        <div className="carte" style={{ marginBottom: 18 }}>
+          <span className="gras">Recherche arrêtée à votre demande.</span>
+          <div className="petit attenue" style={{ marginTop: 6 }}>
+            Les {investigation.nb_profils_trouves} compte(s) déjà trouvés sont
+            conservés et restent exploitables ci-dessous.
+            {investigation.nb_profils_trouves === 0 &&
+              " Aucun résultat n'ayant été obtenu, la recherche ne vous a pas été décomptée."}
           </div>
         </div>
       )}
