@@ -221,8 +221,12 @@ class DonneeExtraite(Base, HorodatageMixin):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=nouvel_id)
-    profil_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("profils_identite.id", ondelete="CASCADE"), nullable=False, index=True
+    #: Compte dont l'information a été extraite. **Nul** quand elle provient d'un point
+    #: de départ et non d'un profil : le nom derrière une adresse Gravatar ou
+    #: l'opérateur d'un numéro décrivent la personne recherchée, pas un compte trouvé.
+    #: L'exiger faisait perdre ces informations lorsque aucun compte n'était trouvé.
+    profil_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("profils_identite.id", ondelete="CASCADE"), nullable=True, index=True
     )
     investigation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     organisation_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
@@ -240,7 +244,7 @@ class DonneeExtraite(Base, HorodatageMixin):
     # Cette donnée a-t-elle déjà servi de point de pivot ? (anti-boucle)
     pivotee: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    profil: Mapped[ProfilIdentite] = relationship(back_populates="donnees_extraites")
+    profil: Mapped[ProfilIdentite | None] = relationship(back_populates="donnees_extraites")
 
     def __repr__(self) -> str:
         return f"<DonneeExtraite {self.type}={self.valeur[:40]}>"

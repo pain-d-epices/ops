@@ -20,7 +20,6 @@ from app.modeles.investigation import (
     ExecutionRecherche,
     Investigation,
     PointDepart,
-    ProfilIdentite,
 )
 from app.moteur.chercheurs.base import ResultatChercheur
 from app.moteur.chercheurs.registre import chercheur_pour
@@ -66,30 +65,66 @@ def chercheur_autorise(type_point_depart: str, plan: Plan) -> tuple[bool, str | 
     return True, None
 
 
-def traiter_point_depart(
-    session: Session,
-    investigation: Investigation,
-    point: PointDepart,
-    plan: Plan,
-    options: dict | None = None,
-    rappel=None,
-) -> BilanPointDepart:
-    """Exécute la recherche correspondant à un point de départ et enregistre le résultat."""
-    bilan = BilanPointDepart()
+def marquer_point_en_cours(session: Session, point: PointDepart, plan: Plan) -> str | None:
+    """Vérifie le droit, marque le point « en cours ». Renvoie un motif de refus, ou None.
+
+    Transaction **courte** : à appeler avant l'appel réseau, jamais autour.
+    """
     autorise, motif = chercheur_autorise(point.type, plan)
     if not autorise:
         point.statut = "non_autorise"
         point.message_erreur = motif
-        bilan.erreur = motif
-        return bilan
-
-    chercheur = chercheur_pour(point.type)
-    assert chercheur is not None  # garanti par chercheur_autorise
+        point.traite_le = maintenant()
+        return motif or "Type de recherche non autorisé."
 
     point.statut = "en_cours"
     session.flush()
+    return None
 
-    resultat = chercheur.chercher(point.valeur, options or {}, rappel=rappel)
+
+def executer_chercheur(
+    type_point_depart: str, valeur: str, options: dict | None = None, rappel=None
+) -> ResultatChercheur | None:
+    """Interroge les sources distantes. **Ne prend pas de session en paramètre, à dessein.**
+
+    Même raison que pour `executer_module` : une recherche par adresse électronique
+    interroge jusqu'à 144 sites et peut durer plusieurs minutes. La conduire à
+    l'intérieur d'une transaction ouverte immobiliserait une connexion PostgreSQL
+    pendant tout ce temps ; avec quelques investigations simultanées, le pool serait
+    saturé et l'API deviendrait indisponible pour **tous** les clients.
+
+    Mesure du 01/08/2026 : une recherche par adresse électronique tenait une connexion
+    ouverte pendant 733 secondes. L'appel réseau est donc effectué ici, hors
+    transaction, et son résultat enregistré ensuite par `enregistrer_point_depart`.
+    """
+    chercheur = chercheur_pour(type_point_depart)
+    if chercheur is None:
+        return None
+    try:
+        return chercheur.chercher(valeur, options or {}, rappel=rappel)
+    except Exception as exc:  # noqa: BLE001 — un chercheur défaillant ne doit pas faire tomber la tâche
+        journal.exception("Chercheur « %s » en échec sur %s", type_point_depart, valeur[:60])
+        resultat = ResultatChercheur(entree=valeur, type_entree=type_point_depart)
+        resultat.erreur = f"Recherche « {type_point_depart} » en erreur : {exc}"[:500]
+        return resultat
+
+
+def enregistrer_point_depart(
+    session: Session,
+    investigation: Investigation,
+    point: PointDepart,
+    resultat: ResultatChercheur | None,
+) -> BilanPointDepart:
+    """Enregistre le résultat d'un chercheur. Transaction **courte**."""
+    bilan = BilanPointDepart()
+
+    if resultat is None:
+        motif = f"Aucun outil de recherche disponible pour le type « {point.type} »."
+        point.statut = "erreur"
+        point.message_erreur = motif
+        point.traite_le = maintenant()
+        bilan.erreur = motif
+        return bilan
 
     if resultat.erreur and not resultat.comptes:
         point.statut = "erreur"
@@ -107,6 +142,28 @@ def traiter_point_depart(
     bilan.comptes_trouves = len(resultat.comptes)
     bilan.informations = len(resultat.informations)
     return bilan
+
+
+def traiter_point_depart(
+    session: Session,
+    investigation: Investigation,
+    point: PointDepart,
+    plan: Plan,
+    options: dict | None = None,
+    rappel=None,
+) -> BilanPointDepart:
+    """Enchaîne vérification, appel réseau et enregistrement dans la session fournie.
+
+    Pratique pour les tests et les scripts. **À éviter dans les tâches de fond** :
+    l'appel réseau se déroule alors dans la transaction ouverte — voir l'explication
+    dans `executer_chercheur`. Les tâches utilisent les trois fonctions séparément.
+    """
+    motif = marquer_point_en_cours(session, point, plan)
+    if motif is not None:
+        return BilanPointDepart(erreur=motif)
+
+    resultat = executer_chercheur(point.type, point.valeur, options, rappel)
+    return enregistrer_point_depart(session, investigation, point, resultat)
 
 
 def _enregistrer(
@@ -162,28 +219,25 @@ def _enregistrer(
         meta={"point_depart": True, "type_point_depart": point.type},
     )
 
-    # Un profil porteur est nécessaire pour stocker les données extraites : on
-    # rattache celles-ci au premier compte trouvé s'il existe, faute de quoi elles
-    # ne figurent que dans le graphe.
-    profil_porteur = (
-        session.query(ProfilIdentite)
-        .filter(ProfilIdentite.investigation_id == investigation.id)
-        .order_by(ProfilIdentite.created_at.desc())
-        .first()
-    )
-
+    # Ces informations décrivent la personne recherchée, pas un compte : elles sont
+    # donc enregistrées **sans profil porteur** (`profil_id` nul).
+    #
+    # Auparavant, elles n'étaient conservées que si un compte avait déjà été trouvé,
+    # et purement perdues sinon — c'est-à-dire dans le cas où elles comptaient le
+    # plus. Mesure du 01/08/2026 : une recherche par adresse électronique remontait un
+    # profil Gravatar complet dont rien n'était enregistré, faute de compte auquel le
+    # rattacher. Ni affichage, ni corrélation, ni rebond possible.
     for info in resultat.informations:
-        if profil_porteur is not None:
-            _ajouter_donnee(
-                session,
-                investigation,
-                profil_porteur,
-                type_donnee=info.type,
-                valeur=info.valeur,
-                module_source=f"chercheur:{point.type}",
-                confiance=info.confiance,
-                meta={**info.meta, "issu_du_point_de_depart": point.id},
-            )
+        _ajouter_donnee(
+            session,
+            investigation,
+            None,
+            type_donnee=info.type,
+            valeur=info.valeur,
+            module_source=f"chercheur:{point.type}",
+            confiance=info.confiance,
+            meta={**info.meta, "issu_du_point_de_depart": point.id},
+        )
 
         type_noeud_info = _type_noeud_information(info.type)
         if type_noeud_info is None:

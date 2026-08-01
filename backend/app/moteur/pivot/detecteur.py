@@ -58,7 +58,9 @@ class DonneeCandidate:
     type: str
     valeur: str
     valeur_normalisee: str
-    profil_id: str
+    #: Compte d'origine. Nul lorsque la donnée vient d'un point de départ et non d'un
+    #: profil trouvé (nom issu d'un profil Gravatar, opérateur d'un numéro).
+    profil_id: str | None
     profil_site: str
     confiance: float = 1.0
     module_source: str = ""

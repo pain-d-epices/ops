@@ -505,3 +505,107 @@ def test_lancer_investigation_saute_la_recherche_large_sans_pseudonyme(runner_fa
         assert profils[0].site_domaine == "example.com"
     finally:
         session.close()
+
+
+# --- Sources complémentaires (recherche web / dark web) ---------------------
+
+
+class _SourceFactice:
+    """Source complémentaire déterministe, pour vérifier le branchement dans
+    `executer_recherche` sans dépendre de DuckDuckGo ou Ahmia."""
+
+    nom = "source_factice"
+    libelle = "Source factice"
+    categorie = "web"
+
+    def __init__(self, sites):
+        self._sites = sites
+        self.appels: list[str] = []
+
+    def disponible(self) -> bool:
+        return True
+
+    def rechercher(self, pseudo: str):
+        from app.moteur.sources.base import ResultatSource
+
+        self.appels.append(pseudo)
+        return ResultatSource(source=self.nom, sites=list(self._sites), nb_resultats_bruts=len(self._sites))
+
+
+def test_recherche_etendue_absente_pour_le_plan_gratuit(runner_factice, monkeypatch):
+    """Le palier gratuit ne doit jamais déclencher les sources complémentaires : ni
+    appel réseau, ni profil supplémentaire dans le graphe."""
+    from app.taches.recherche import lancer_investigation
+
+    source = _SourceFactice([site("Blog", "jeanmartin", "blog-jeanmartin.fr")])
+    monkeypatch.setattr("app.moteur.sources.registre.sources_disponibles", lambda: [source])
+
+    investigation_id, _ = _preparer_investigation("gratuit_source@test.fr")
+    lancer_investigation(investigation_id)
+
+    assert source.appels == []
+    session = FabriqueSession()
+    try:
+        noms_sites = {
+            p.site_nom
+            for p in session.query(ProfilIdentite).filter(
+                ProfilIdentite.investigation_id == investigation_id
+            )
+        }
+        assert "Blog" not in noms_sites
+    finally:
+        session.close()
+
+
+def test_recherche_etendue_fusionne_les_sources_pour_un_plan_starter(runner_factice, monkeypatch):
+    """Un plan qui inclut RECHERCHE_ETENDUE doit voir les résultats des sources
+    complémentaires apparaître comme des profils normaux, fusionnés à ceux de Maigret."""
+    from app.taches.recherche import lancer_investigation
+
+    source = _SourceFactice([site("Blog", "jeanmartin", "blog-jeanmartin.fr")])
+    monkeypatch.setattr("app.moteur.sources.registre.sources_disponibles", lambda: [source])
+
+    investigation_id, organisation_id = _preparer_investigation("starter_source@test.fr", plan="starter")
+    lancer_investigation(investigation_id)
+
+    assert source.appels == ["jeanmartin"]
+    session = FabriqueSession()
+    try:
+        noms_sites = {
+            p.site_nom
+            for p in session.query(ProfilIdentite).filter(
+                ProfilIdentite.investigation_id == investigation_id
+            )
+        }
+        # Les comptes Maigret et le résultat de la source complémentaire coexistent.
+        assert {"GitHub", "Mastodon", "Blog"} <= noms_sites
+    finally:
+        session.close()
+
+
+def test_recherche_etendue_ne_duplique_pas_un_compte_deja_trouve_par_maigret(
+    runner_factice, monkeypatch
+):
+    """Une source qui retomberait sur une URL déjà trouvée par Maigret ne doit pas
+    créer de doublon (même règle de déduplication que le reste du pipeline)."""
+    from app.taches.recherche import lancer_investigation
+
+    doublon = site("GitHub bis", "jeanmartin", "github.com", url="https://github.com/jeanmartin")
+    source = _SourceFactice([doublon])
+    monkeypatch.setattr("app.moteur.sources.registre.sources_disponibles", lambda: [source])
+
+    investigation_id, _ = _preparer_investigation("starter_doublon@test.fr", plan="starter")
+    lancer_investigation(investigation_id)
+
+    session = FabriqueSession()
+    try:
+        profils_github = list(
+            session.query(ProfilIdentite).filter(
+                ProfilIdentite.investigation_id == investigation_id,
+                ProfilIdentite.site_domaine == "github.com",
+            )
+        )
+        assert len(profils_github) == 1
+        assert profils_github[0].site_nom == "GitHub"  # la version Maigret l'emporte
+    finally:
+        session.close()

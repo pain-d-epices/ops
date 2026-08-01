@@ -33,6 +33,33 @@ journal = logging.getLogger(__name__)
 MOTIF_EMAIL = re.compile(r"^[\w.+-]+@[\w-]+\.[\w.-]{2,}$")
 
 
+def _valeurs_texte(brut: Any) -> list[str]:
+    """Normalise un champ Gravatar qui peut être une chaîne, une liste, ou absent.
+
+    L'API n'est pas homogène : `currentLocation` est une chaîne, `urls` une liste de
+    dictionnaires. Itérer une chaîne caractère par caractère produisait des données
+    absurdes ; cette fonction ramène tous les cas à une liste de textes exploitables.
+    """
+    if not brut:
+        return []
+    if isinstance(brut, str):
+        texte = brut.strip()
+        return [texte] if texte else []
+    if isinstance(brut, dict):
+        # Certaines entrées prennent la forme {"name": "...", "value": "..."}
+        for cle in ("formatted", "value", "name"):
+            valeur = brut.get(cle)
+            if isinstance(valeur, str) and valeur.strip():
+                return [valeur.strip()]
+        return []
+    if isinstance(brut, list):
+        valeurs: list[str] = []
+        for element in brut:
+            valeurs.extend(_valeurs_texte(element))
+        return valeurs
+    return []
+
+
 class ChercheurEmail(Chercheur):
     nom = "email"
     libelle = "Adresse électronique"
@@ -137,13 +164,16 @@ class ChercheurEmail(Chercheur):
             TypeDonnee.BIO, (profil.get("aboutMe") or "")[:2000], confiance=0.9, source="Gravatar"
         )
 
-        nom = profil.get("name") or {}
-        if isinstance(nom, dict) and nom.get("formatted"):
+        for nom_formate in _valeurs_texte(profil.get("name")):
             resultat.ajouter_information(
-                TypeDonnee.NOM_REEL, nom["formatted"], confiance=0.85, source="Gravatar"
+                TypeDonnee.NOM_REEL, nom_formate, confiance=0.85, source="Gravatar"
             )
 
-        for lieu in profil.get("currentLocation") or []:
+        # `currentLocation` est une **chaîne** (« Portland, OR »), pas une liste.
+        # L'itérer directement parcourait ses caractères : chaque lettre devenait une
+        # localisation, donc un nœud du graphe — neuf nœuds « P », « o », « r »… pour
+        # un seul lieu. Constaté en conditions réelles le 01/08/2026.
+        for lieu in _valeurs_texte(profil.get("currentLocation")):
             resultat.ajouter_information(TypeDonnee.LOCALISATION, lieu, confiance=0.8, source="Gravatar")
 
         # Comptes déclarés par la personne sur son profil Gravatar : pistes fiables
@@ -165,11 +195,12 @@ class ChercheurEmail(Chercheur):
                     source=f"compte {compte.get('shortname', '')} déclaré sur Gravatar",
                 )
 
-        for lien in profil.get("urls") or []:
-            if isinstance(lien, dict) and lien.get("value"):
-                resultat.ajouter_information(
-                    TypeDonnee.LIEN_EXTERNE, lien["value"], confiance=0.9, source="Gravatar"
-                )
+        # Même prudence que pour `currentLocation` : `urls` est normalement une liste
+        # de dictionnaires, mais rien ne garantit sa forme d'une réponse à l'autre.
+        for lien in _valeurs_texte(profil.get("urls")):
+            resultat.ajouter_information(
+                TypeDonnee.LIEN_EXTERNE, lien, confiance=0.9, source="Gravatar"
+            )
 
         avatar = profil.get("thumbnailUrl")
         if avatar:
