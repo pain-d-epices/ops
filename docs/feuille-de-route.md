@@ -230,6 +230,58 @@ qu'à brancher les nouveaux chercheurs dessus.
 
 ---
 
+## Axe 4 — Recherche web ouverte et dark web
+
+**Fait le 31/07/2026.** Deux sources complémentaires à Maigret, branchées dans
+`executer_recherche` pour le même pseudonyme, gratuites et sans clé. Voir
+`app/moteur/sources/` (patron identique aux modules et chercheurs : un fichier = une
+source, auto-découverte).
+
+### Recherche web (DuckDuckGo)
+
+Interroge `lite.duckduckgo.com` (version texte, sans JavaScript) en HTTPS classique,
+via le client HTTP commun — donc soumise au même limiteur de débit global que tous les
+autres modules. Aucune bibliothèque tierce type `ddgs` : elle ferait ses propres
+requêtes hors du limiteur, ce qui casserait la garantie « jamais plus vite que le débit
+toléré par un site tiers ».
+
+### Recherche dark web (Ahmia)
+
+Interroge `ahmia.fi`, qui indexe les services cachés (.onion) du réseau Tor et exclut
+explicitement les contenus illégaux de son index. **Aucune connexion Tor depuis le
+serveur** : seule la page de résultats déjà publique, en HTTPS classique, est lue —
+titre, extrait et adresse .onion, jamais le contenu du service caché lui-même.
+
+Deux points relevés en le mettant en œuvre, tranchés avec vous le 31/07/2026 :
+
+- Ahmia protège sa page de résultats par un jeton anti-robot à usage unique (un champ
+  caché, nom aléatoire à chaque chargement de la page d'accueil, à renvoyer avec la
+  recherche). Ce n'est pas une authentification, mais c'est un mécanisme anti-scraping
+  — décision : on le reproduit quand même, le risque étant jugé faible (aucune donnée
+  protégée, aucun contournement de CAPTCHA).
+- Le service est instable côté serveur (erreurs 504 constatées en le testant) : chaque
+  échec est traité comme une simple indisponibilité de la source, jamais comme une
+  erreur bloquante pour l'investigation.
+
+### Coupler d'autres moteurs dark web : recherche faite, résultat limité
+
+Recherche menée sur l'outil GitHub [`megadose/OnionSearch`](https://github.com/megadose/OnionSearch)
+(GPL-3.0 — regardé uniquement pour la liste des moteurs qu'il cible, jamais importé
+comme dépendance), qui agrège 16 moteurs de recherche dark web. Résultat : **15 des 16
+ne sont accessibles que par leur adresse .onion**, c'est-à-dire qu'il faudrait faire
+passer nos requêtes par le réseau Tor lui-même (proxy SOCKS, service Tor à faire
+tourner et maintenir) — une décision d'infrastructure à part entière, plus lourde que
+l'ajout d'une source, à ne prendre qu'à dessein.
+
+Le seul autre moteur annoncé en clearnet, `darksearch.io`, s'est révélé injoignable
+(délai de résolution DNS dépassé) au moment de la vérification : probablement disparu.
+Ahmia reste donc la seule source dark web active. Le système (`app/moteur/sources/`)
+est construit pour qu'ajouter une source future — un nouveau moteur clearnet qui
+apparaîtrait, ou un jour la connectivité Tor — ne demande qu'un nouveau fichier, sans
+toucher au reste.
+
+---
+
 ## Répartition par palier
 
 **Arrêtée le 30/07/2026** — ce n'est plus une proposition. Les valeurs ci-dessous sont
@@ -248,6 +300,7 @@ celles appliquées par le code (`app/facturation/plans.py`) et verrouillées par
 | **Démarrer depuis un compte** | ❌ | ✅ | ✅ | ✅ |
 | **Résultats de sites sensibles** | ❌ | ✅ | ✅ | ✅ |
 | Modules d'enrichissement | ❌ | ✅ | ✅ | ✅ |
+| Recherche web et dark web | ❌ | ✅ | ✅ | ✅ |
 | Rebond automatique (sans validation) | ❌ | ❌ | ✅ | ✅ |
 | Points de départ multiples | ❌ | 2 maximum | 5 | illimité |
 | Export CSV | ❌ | ✅ | ✅ | ✅ |

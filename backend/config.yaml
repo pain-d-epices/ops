@@ -106,7 +106,14 @@ user_scanner:
   concurrence: 20
   # Délai entre requêtes, en secondes. 0 = pas de délai imposé.
   delai_entre_requetes: 0
-  timeout_global: 600
+  # Mesure du 01/08/2026 sur une recherche par adresse électronique réelle : l'outil
+  # consomme la TOTALITÉ de ce délai puis rend zéro résultat — beaucoup de sites ne
+  # répondent jamais, et l'attente se cumule. Une recherche par adresse durait donc
+  # 12 minutes pour ne rien rapporter, en monopolisant un worker.
+  # 180 s suffisent à obtenir ce que l'outil sait trouver ; au-delà, on paie
+  # l'attente de sites qui ne répondront pas. À remonter seulement si des résultats
+  # apparaissent réellement au-delà de trois minutes.
+  timeout_global: 180
   # Les sites pour adultes sont écartés par défaut : signaler une inscription sur
   # l'un d'eux est une information lourde de conséquences, et un faux positif y
   # serait diffamatoire. À n'activer que pour une enquête qui le justifie.
@@ -125,6 +132,21 @@ adresse:
   # Interroger d'abord la Base Adresse Nationale (France, plus précise et sans
   # limite contraignante), puis Nominatim en repli pour le reste du monde.
   utiliser_ban: true
+
+# --- Sources complémentaires : recherche web et dark web ---------------------
+# Complètent Maigret pour le même pseudonyme (voir app/moteur/sources/). Fonctionnalité
+# payante (RECHERCHE_ETENDUE dans facturation/plans.py) : désactivable ici sans
+# toucher au code, par exemple si l'une des sources devient durablement instable.
+recherche_web:
+  actif: true
+  # Nombre maximal de résultats DuckDuckGo retenus par recherche.
+  nb_resultats_max: 10
+
+recherche_darkweb:
+  actif: true
+  # Jamais de connexion Tor depuis le serveur : Ahmia n'est interrogé qu'en HTTPS
+  # classique, sur son propre index déjà public (voir app/moteur/sources/ahmia.py).
+  nb_resultats_max: 10
 
 # --- Limitation de débit (rate limiting) ------------------------------------
 # File d'attente GLOBALE par domaine cible, partagée entre TOUTES les organisations.
@@ -200,6 +222,17 @@ rate_limiting:
       # et un User-Agent identifiable. La dépasser fait bannir l'adresse IP.
       requetes_par_minute: 60
       rafale: 1
+    "lite.duckduckgo.com":
+      # Pas d'API publique documentée pour ce point d'accès : on reste
+      # volontairement prudent pour ne jamais ressembler à un usage abusif.
+      requetes_par_minute: 10
+      rafale: 3
+    "ahmia.fi":
+      # Service communautaire à moyens limités, déjà instable de son propre chef.
+      # Deux requêtes HTTP par recherche (accueil + résultats) : ce réglage laisse
+      # une marge large sans jamais le solliciter au-delà du raisonnable.
+      requetes_par_minute: 6
+      rafale: 4
 
 # --- Réseau -----------------------------------------------------------------
 reseau:

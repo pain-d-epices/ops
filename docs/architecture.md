@@ -93,7 +93,10 @@ backend/app/
 │   ├── pivot/
 │   │   ├── detecteur.py   # quelles données sont pivotables
 │   │   └── orchestrateur.py # quatre garde-fous cumulatifs
-│   └── graphe/depot.py    # seule couche connaissant les tables du graphe
+│   ├── graphe/depot.py    # seule couche connaissant les tables du graphe
+│   └── sources/            # recherche web (DuckDuckGo) et dark web (Ahmia), en
+│                            # complément de Maigret ; un fichier = une source,
+│                            # auto-découverte — voir docs/feuille-de-route.md
 │
 ├── modules/               # un fichier = un site, auto-découvert
 ├── infra/
@@ -159,6 +162,47 @@ recalcul complet de l'investigation.
 
 C'est aussi pourquoi marquer un profil comme faux positif modifie le score des autres :
 un profil rejeté cesse de servir de point de comparaison.
+
+---
+
+## Arrêter une recherche en cours
+
+Le worker tourne en pool `solo` sous Windows : le processus qui exécute la tâche
+**est** le worker. Un `revoke(terminate=True)` de Celery arrêterait donc le service
+pour tous les clients, pas une recherche. Par ailleurs une investigation n'est pas une
+tâche mais une chaîne (recherche → enrichissement → pivot → recherche…) : révoquer le
+maillon courant laisserait partir les suivants.
+
+L'arrêt est donc **coopératif** (`app/moteur/annulation.py`) :
+
+```
+POST /investigations/{id}/annuler
+  ├─ statut → "annulee" en base   (la base fait foi)
+  ├─ drapeau posé dans Redis      (cache de lecture rapide)
+  ├─ propositions de rebond en attente → refusées
+  └─ quota rendu SI nb_profils_trouves == 0
+                    │
+     chaque étape consulte le drapeau à ses points de reprise
+                    │
+   ┌────────────────┼────────────────┬──────────────────┐
+   ▼                ▼                ▼                  ▼
+entrée de       entre deux      pendant Maigret     avant chaque
+chaque tâche    points de       (surveillance       enchaînement
+                départ/source   1 s → kill)         apply_async
+```
+
+Deux choix méritent d'être explicités :
+
+- **La base fait foi, Redis n'est qu'un cache.** La surveillance de Maigret consulte le
+  drapeau chaque seconde pendant plusieurs minutes ; y répondre par une requête SQL à
+  chaque fois chargerait la base pour rien. Redis absent, tout continue de fonctionner.
+- **Le quota n'est rendu que si rien n'a été trouvé.** Rembourser une recherche déjà
+  fructueuse permettrait d'enchaîner « je lance, je récupère les résultats, j'annule,
+  je suis remboursé » — soit un volume gratuit illimité.
+
+Limite assumée : un scan Maigret interrompu ne rend aucun résultat partiel, car il
+n'écrit son rapport qu'à la fin. Ce qui est conservé, ce sont les comptes déjà
+enregistrés par les étapes précédentes.
 
 ---
 

@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 # --- Codes de fonctionnalités ------------------------------------------------
 # Utilisés par le décorateur @exiger_fonctionnalite(...) sur les endpoints.
 MODULES = "modules"                        # modules de recherche spécifiques par site
+#: Sources complémentaires à Maigret pour la recherche large : web ouvert (DuckDuckGo)
+#: et index public du réseau Tor (Ahmia). Voir app/moteur/sources/.
+RECHERCHE_ETENDUE = "recherche_etendue"
 PIVOT = "pivot"                            # pivot (au moins en mode supervisé)
 PIVOT_AUTOMATIQUE = "pivot_automatique"    # pivot sans validation humaine
 EXPORT_CSV = "export_csv"
@@ -80,6 +83,7 @@ class DefinitionPlan:
 #   | Sites par recherche  | 200          | 1000    | tous     | tous       |
 #   | Types de recherche   | pseudo, mail | tous    | tous     | tous       |
 #   | Sites sensibles      | non          | oui     | oui      | oui        |
+#   | Recherche web/darkweb| non          | oui     | oui      | oui        |
 #
 # Le palier gratuit sert la découverte : il permet de juger la qualité de la
 # corrélation sur un pseudonyme ou une adresse, sans ouvrir ce qui fait la valeur
@@ -128,7 +132,7 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         # couverture en nombre de sites, pas l'accès aux types de recherche.
         fonctionnalites=[
             MODULES, PIVOT, EXPORT_CSV, MULTI_UTILISATEURS, SITES_SENSIBLES,
-            *RECHERCHES_SPECIALISEES,
+            RECHERCHE_ETENDUE, *RECHERCHES_SPECIALISEES,
         ],
         max_points_depart=2,
         max_sites_analyses=1000,
@@ -154,7 +158,7 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         fonctionnalites=[
             MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
             RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,
-            *RECHERCHES_SPECIALISEES,
+            RECHERCHE_ETENDUE, *RECHERCHES_SPECIALISEES,
         ],
         max_points_depart=5,
         # Recherche maximale : aucune borne sur le nombre de sites analysés.
@@ -179,7 +183,7 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         fonctionnalites=[
             MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
             API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,
-            *RECHERCHES_SPECIALISEES,
+            RECHERCHE_ETENDUE, *RECHERCHES_SPECIALISEES,
         ],
         # 0 = pas de limite : les investigations complexes de ce palier peuvent
         # partir d'autant d'éléments que nécessaire.

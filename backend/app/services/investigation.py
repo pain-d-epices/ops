@@ -187,6 +187,11 @@ def _creer_ou_recuperer_profil(
             "rang_alexa": site.rang_alexa,
             "est_similaire": site.est_similaire,
             "code_http": site.code_http,
+            # D'où vient ce compte : Maigret, user-scanner, recherche web, dark web…
+            # Sans cette trace, un analyste ne peut pas juger de la fiabilité d'un
+            # résultat, et il devenait impossible de mesurer l'apport réel de chaque
+            # source. Le marqueur est posé par la source dans `brut["_source"]`.
+            "source_decouverte": (site.brut or {}).get("_source", "maigret"),
         },
     )
     session.add(profil)
@@ -241,7 +246,7 @@ def _importer_donnees_maigret(
 def _ajouter_donnee(
     session: Session,
     investigation: Investigation,
-    profil: ProfilIdentite,
+    profil: ProfilIdentite | None,
     *,
     type_donnee: TypeDonnee,
     valeur: str,
@@ -249,7 +254,12 @@ def _ajouter_donnee(
     confiance: float = 1.0,
     meta: dict | None = None,
 ) -> DonneeExtraite | None:
-    """Ajoute une donnée extraite, sans doublon pour un même profil."""
+    """Ajoute une donnée extraite, sans doublon.
+
+    `profil` peut être nul : l'information décrit alors la personne recherchée et non
+    un compte trouvé (voir `DonneeExtraite.profil_id`). La déduplication se fait dans
+    ce cas à l'échelle de l'investigation, puisqu'il n'y a pas de profil qui la porte.
+    """
     from app.modules.base import InfoExtraite
 
     info = InfoExtraite(type=type_donnee, valeur=valeur, confiance=confiance)
@@ -257,9 +267,16 @@ def _ajouter_donnee(
     if not normalisee:
         return None
 
+    profil_id = profil.id if profil is not None else None
+    condition_profil = (
+        DonneeExtraite.profil_id == profil_id
+        if profil_id is not None
+        else DonneeExtraite.profil_id.is_(None)
+    )
     existante = session.scalar(
         select(DonneeExtraite).where(
-            DonneeExtraite.profil_id == profil.id,
+            DonneeExtraite.investigation_id == investigation.id,
+            condition_profil,
             DonneeExtraite.type == type_donnee.value,
             DonneeExtraite.valeur_normalisee == normalisee,
         )
@@ -268,7 +285,7 @@ def _ajouter_donnee(
         return existante
 
     donnee = DonneeExtraite(
-        profil_id=profil.id,
+        profil_id=profil_id,
         investigation_id=investigation.id,
         organisation_id=investigation.organisation_id,
         type=type_donnee.value,
@@ -300,6 +317,10 @@ def construire_contexte(session: Session, investigation: Investigation) -> Conte
 
     par_profil: dict[str, dict[str, list[str]]] = {}
     for donnee in donnees:
+        # Une donnée issue d'un point de départ n'appartient à aucun compte : elle ne
+        # peut donc pas contribuer au score *d'un* profil en particulier.
+        if donnee.profil_id is None:
+            continue
         par_profil.setdefault(donnee.profil_id, {}).setdefault(donnee.type, []).append(donnee.valeur)
 
     evalues = [
@@ -570,6 +591,26 @@ def collecter_donnees_pivotables(
 
     candidates: list[DonneeCandidate] = []
     for donnee in donnees:
+        # Donnée issue d'un point de départ (profil Gravatar, opérateur d'un numéro) :
+        # elle décrit la personne recherchée elle-même. Elle est donc pivotable sans
+        # condition de score — il n'y a pas de profil douteux à écarter, et c'est
+        # souvent la piste la plus solide de l'investigation, puisqu'elle vient d'une
+        # page que la personne a remplie elle-même.
+        if donnee.profil_id is None:
+            candidates.append(
+                DonneeCandidate(
+                    identifiant=donnee.id,
+                    type=donnee.type,
+                    valeur=donnee.valeur,
+                    valeur_normalisee=donnee.valeur_normalisee,
+                    profil_id=None,
+                    profil_site="point de départ",
+                    confiance=donnee.confiance_extraction,
+                    module_source=donnee.module_source,
+                )
+            )
+            continue
+
         profil = profils.get(donnee.profil_id)
         if profil is None or profil.verdict_manuel == "faux_positif":
             continue

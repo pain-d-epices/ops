@@ -15,10 +15,11 @@ import logging
 from app.db.base import maintenant
 from app.db.session import portee_session
 from app.facturation.abonnements import plan_actif
-from app.facturation.plans import MODULES
+from app.facturation.plans import MODULES, RECHERCHE_ETENDUE
 from app.infra.evenements import TypeEvenement, bus
 from app.modeles.enums import StatutInvestigation
 from app.modeles.investigation import ExecutionRecherche, Investigation
+from app.moteur.annulation import est_annulee
 from app.moteur.maigret_runner import OptionsRecherche, runner
 from app.services.investigation import (
     enregistrer_resultats_maigret,
@@ -27,6 +28,51 @@ from app.services.investigation import (
 from app.taches.celery_app import celery_app
 
 journal = logging.getLogger(__name__)
+
+
+def _cloturer_annulation(
+    investigation_id: str, organisation_id: str, execution_id: str | None = None
+) -> dict:
+    """Clôt proprement une recherche interrompue en cours d'exécution.
+
+    Les comptes déjà enregistrés sont **conservés** : l'analyste qui arrête une
+    recherche trop longue veut garder ce qu'elle a déjà trouvé, pas repartir de rien.
+    Seule l'exécution en cours est marquée comme interrompue, et rien n'est mis en
+    file derrière elle.
+    """
+    with portee_session() as session:
+        investigation = session.get(Investigation, investigation_id)
+        if investigation is not None:
+            # Rescorer avant de clore : les profils partiels doivent porter un score
+            # cohérent, sans quoi ils s'afficheraient tous à zéro.
+            rescorer_investigation(session, investigation)
+            investigation.statut = StatutInvestigation.ANNULEE.value
+            investigation.etape_courante = "Arrêtée à votre demande"
+            investigation.terminee_le = maintenant()
+        if execution_id:
+            execution = session.get(ExecutionRecherche, execution_id)
+            if execution is not None and execution.statut == "en_cours":
+                execution.statut = "interrompue"
+                execution.message_erreur = "Interrompue à la demande de l'utilisateur."
+
+    bus().emettre(
+        TypeEvenement.INVESTIGATION_TERMINEE, investigation_id, organisation_id,
+        statut=StatutInvestigation.ANNULEE.value, annulee=True,
+        etape="Arrêtée à votre demande",
+    )
+    journal.info("Investigation %s clôturée après annulation", investigation_id)
+    return {"statut": "annulee"}
+
+
+def _arret_demande(investigation_id: str) -> bool:
+    """Point de reprise partagé par toutes les étapes du cycle.
+
+    Consulté à l'entrée de chaque tâche et avant chaque enchaînement : une
+    investigation annulée ne doit ni poursuivre son étape courante, ni mettre la
+    suivante en file. Voir `app/moteur/annulation.py` pour le mécanisme.
+    """
+    with portee_session() as session:
+        return est_annulee(investigation_id, session)
 
 
 @celery_app.task(name="app.taches.recherche.lancer_investigation")
@@ -46,13 +92,23 @@ def lancer_investigation(investigation_id: str) -> dict:
     """
     from app.modeles.enums import TypePointDepart
     from app.modeles.investigation import PointDepart
-    from app.services.points_depart import traiter_point_depart
+    from app.services.points_depart import (
+        BilanPointDepart,
+        enregistrer_point_depart,
+        executer_chercheur,
+        marquer_point_en_cours,
+    )
 
     with portee_session() as session:
         investigation = session.get(Investigation, investigation_id)
         if investigation is None:
             journal.warning("Investigation %s introuvable", investigation_id)
             return {"statut": "introuvable"}
+
+        # Annulation possible dès l'attente en file, avant tout traitement.
+        if est_annulee(investigation_id, session):
+            journal.info("Investigation %s annulée avant démarrage", investigation_id)
+            return {"statut": "annulee"}
 
         investigation.statut = StatutInvestigation.EN_COURS.value
         investigation.demarree_le = maintenant()
@@ -84,6 +140,11 @@ def lancer_investigation(investigation_id: str) -> dict:
     # --- Points de départ spécialisés ---
     pseudos_decouverts: list[str] = []
     for point_id in points_specialises:
+        # Chaque élément est un appel réseau : on rend la main entre deux.
+        if _arret_demande(investigation_id):
+            journal.info("Investigation %s annulée pendant les points de départ", investigation_id)
+            return {"statut": "annulee", "pseudos_decouverts": pseudos_decouverts[:10]}
+        # --- Étape 1 : vérifier le droit et marquer « en cours » (transaction courte) ---
         with portee_session() as session:
             investigation = session.get(Investigation, investigation_id)
             point = session.get(PointDepart, point_id)
@@ -94,25 +155,46 @@ def lancer_investigation(investigation_id: str) -> dict:
             options = dict(investigation.options or {})
             options["extraction_activee"] = plan.possede(MODULES)
 
-            bilan = traiter_point_depart(session, investigation, point, plan, options)
-            if bilan.erreur:
-                journal.info("Point de départ %s : %s", point.type, bilan.erreur)
+            motif_refus = marquer_point_en_cours(session, point, plan)
+            type_point, valeur_point = point.type, point.valeur
 
-            # Un pseudonyme découvert (partie locale d'une adresse, pseudo extrait
-            # d'une URL de compte) alimente la recherche large qui suit.
-            from app.modeles.enums import TypeDonnee
-            from app.modeles.investigation import DonneeExtraite
+        if motif_refus is not None:
+            journal.info("Point de départ %s refusé : %s", type_point, motif_refus)
+            bilan = BilanPointDepart(erreur=motif_refus)
+        else:
+            # --- Étape 2 : interroger les sources, HORS transaction ---
+            # Une recherche par adresse électronique dure plusieurs minutes : garder
+            # une connexion PostgreSQL ouverte pendant ce temps saturerait le pool dès
+            # que quelques investigations tournent en parallèle. Même règle que pour
+            # l'enrichissement (voir `executer_module`).
+            resultat_chercheur = executer_chercheur(type_point, valeur_point, options)
 
-            for donnee in (
-                session.query(DonneeExtraite)
-                .filter(
-                    DonneeExtraite.investigation_id == investigation_id,
-                    DonneeExtraite.type == TypeDonnee.PSEUDO_ALT.value,
-                )
-                .all()
-            ):
-                if donnee.valeur not in pseudos_decouverts:
-                    pseudos_decouverts.append(donnee.valeur)
+            # --- Étape 3 : enregistrer le résultat (transaction courte) ---
+            with portee_session() as session:
+                investigation = session.get(Investigation, investigation_id)
+                point = session.get(PointDepart, point_id)
+                if investigation is None or point is None:
+                    continue
+
+                bilan = enregistrer_point_depart(session, investigation, point, resultat_chercheur)
+                if bilan.erreur:
+                    journal.info("Point de départ %s : %s", type_point, bilan.erreur)
+
+                # Un pseudonyme découvert (partie locale d'une adresse, pseudo extrait
+                # d'une URL de compte) alimente la recherche large qui suit.
+                from app.modeles.enums import TypeDonnee
+                from app.modeles.investigation import DonneeExtraite
+
+                for donnee in (
+                    session.query(DonneeExtraite)
+                    .filter(
+                        DonneeExtraite.investigation_id == investigation_id,
+                        DonneeExtraite.type == TypeDonnee.PSEUDO_ALT.value,
+                    )
+                    .all()
+                ):
+                    if donnee.valeur not in pseudos_decouverts:
+                        pseudos_decouverts.append(donnee.valeur)
 
         bus().emettre(
             TypeEvenement.ETAPE, investigation_id, organisation_id,
@@ -211,6 +293,12 @@ def executer_recherche(
         if investigation is None:
             return {"statut": "introuvable"}
 
+        # Une annulation pendant l'attente en file doit empêcher le départ : sans ce
+        # contrôle, annuler pendant un rebond lancerait quand même la recherche suivante.
+        if est_annulee(investigation_id, session):
+            journal.info("Recherche « %s » annulée avant démarrage", pseudo)
+            return {"statut": "annulee"}
+
         organisation_id = investigation.organisation_id
         plan = plan_actif(session, organisation_id)
         options_investigation = investigation.options or {}
@@ -230,6 +318,9 @@ def executer_recherche(
         # L'extraction d'informations par Maigret recouvre la fonctionnalité payante
         # « modules » : elle est désactivée pour les organisations en plan gratuit.
         extraction_autorisee = plan.possede(MODULES)
+        # Recherche web (DuckDuckGo) et dark web (Ahmia) : sources complémentaires,
+        # ouvertes à partir du même palier que les modules d'enrichissement.
+        recherche_etendue_autorisee = plan.possede(RECHERCHE_ETENDUE)
         options_maigret = OptionsRecherche.depuis_config(
             top_sites=options_investigation.get("top_sites"),
             sites_exclus=options_investigation.get("sites_exclus") or [],
@@ -244,7 +335,47 @@ def executer_recherche(
             progression=pourcentage, message=message, pseudo=pseudo, profondeur=profondeur,
         )
 
-    resultat = runner().lancer(pseudo, options_maigret, rappel=progression)
+    # Le drapeau d'arrêt est consulté sans session : la surveillance interroge chaque
+    # seconde pendant plusieurs minutes, et cette portion s'exécute volontairement
+    # hors transaction (voir `annulation.est_annulee`).
+    resultat = runner().lancer(
+        pseudo, options_maigret, rappel=progression,
+        doit_arreter=lambda: est_annulee(investigation_id),
+    )
+
+    if resultat.interrompu:
+        return _cloturer_annulation(investigation_id, organisation_id, execution_id)
+
+    # --- Sources complémentaires : recherche web et dark web ---------------
+    # Même pseudonyme, hors transaction comme Maigret ci-dessus (ce sont aussi des
+    # appels réseau). Un résultat trouvé ici alimente le pipeline existant
+    # (corrélation, graphe) exactement comme un compte Maigret : aucun code séparé.
+    if recherche_etendue_autorisee:
+        from app.moteur.sources.base import cle_compte
+        from app.moteur.sources.registre import sources_disponibles
+
+        # Déduplication sur le **compte** et non sur l'adresse : Maigret renvoie
+        # `www.github.com/torvalds` là où la recherche web trouve
+        # `github.com/torvalds/linux`. Deux adresses, un seul compte — comparer les
+        # URL entières les faisait apparaître en double dans les résultats.
+        urls_connues = {cle_compte(site.url) for site in resultat.sites}
+        for source in sources_disponibles():
+            # Chaque source est un appel réseau distinct : point de reprise entre deux.
+            if est_annulee(investigation_id):
+                return _cloturer_annulation(investigation_id, organisation_id, execution_id)
+            complement = source.rechercher(pseudo)
+            resultat.nb_sites_total += complement.nb_resultats_bruts
+            resultat.nb_sites_scannes += complement.nb_resultats_bruts
+            for site in complement.sites:
+                cle = cle_compte(site.url)
+                if cle in urls_connues:
+                    continue
+                resultat.sites.append(site)
+                urls_connues.add(cle)
+            if complement.erreur:
+                journal.info(
+                    "Source « %s » indisponible pour « %s » : %s", source.nom, pseudo, complement.erreur
+                )
 
     # --- Enregistrement ---------------------------------------------------
     with portee_session() as session:
@@ -293,6 +424,12 @@ def executer_recherche(
 
         plan = plan_actif(session, organisation_id)
         modules_autorises = plan.possede(MODULES)
+        # Annulation survenue pendant l'enregistrement : les résultats viennent d'être
+        # sauvegardés, mais rien ne doit être mis en file derrière.
+        annulee = est_annulee(investigation_id, session)
+
+    if annulee:
+        return _cloturer_annulation(investigation_id, organisation_id, execution_id)
 
     bus().emettre(
         TypeEvenement.RECHERCHE_TERMINEE, investigation_id, organisation_id,
@@ -328,6 +465,13 @@ def finaliser_investigation(investigation_id: str) -> dict:
         investigation = session.get(Investigation, investigation_id)
         if investigation is None:
             return {"statut": "introuvable"}
+
+        # Une tâche de finalisation peut arriver après l'annulation (elle était déjà
+        # en file). Elle ne doit pas repeindre l'investigation en « terminée » :
+        # l'utilisateur l'a arrêtée, l'interface doit continuer de le dire.
+        if investigation.statut == StatutInvestigation.ANNULEE.value:
+            journal.info("Finalisation ignorée : investigation %s annulée", investigation_id)
+            return {"statut": "annulee"}
 
         rescorer_investigation(session, investigation)
         investigation.statut = StatutInvestigation.TERMINEE.value
