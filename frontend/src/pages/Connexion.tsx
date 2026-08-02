@@ -48,7 +48,7 @@ export function PageConnexion() {
       <div className="boite-auth">
         <div className="entete-auth">
           <div className="marque">
-            <span className="marque-logo">◎</span> Ops
+            <img className="marque-logo" src="/logo-ops.png" alt="" /> Ops
           </div>
           <p>Recherche et corrélation de pseudonymes</p>
         </div>

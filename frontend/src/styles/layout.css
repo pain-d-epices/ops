@@ -32,7 +32,16 @@
   letter-spacing: -0.01em;
 }
 .marque:hover { text-decoration: none; }
-.marque-logo { font-size: 19px; }
+/* Le logo (public/logo-ops.png) est déjà détouré en blanc/gris sur fond
+   transparent : il se lit tel quel sur ce thème sombre, aucun filtre requis.
+   Il est plus haut que large (ratio ~0.48) : on ne fixe QUE la hauteur, la
+   largeur suit d'elle-même — la fixer aussi l'écraserait. */
+.marque-logo {
+  height: 20px;
+  width: auto;
+  display: block;
+}
+.entete-auth .marque-logo { height: 34px; }
 
 .navigation { display: flex; align-items: center; gap: 3px; }
 
