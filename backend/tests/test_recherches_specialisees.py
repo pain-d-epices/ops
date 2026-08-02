@@ -224,3 +224,126 @@ def test_le_hash_gravatar_nest_plus_pris_pour_une_adresse():
     from app.services.investigation import CORRESPONDANCE_IDS_MAIGRET
 
     assert "gravatar_email_md5_hash" not in CORRESPONDANCE_IDS_MAIGRET
+
+
+# --- Exploitation des pages citant un numéro ou une adresse -----------------
+# Les titres et extraits ci-dessous sont ceux réellement relevés en base après une
+# recherche sur le standard du Louvre (+33140205050), le 02/08/2026.
+
+
+def _mentions_du_louvre() -> list[MentionWeb]:
+    return [
+        MentionWeb(
+            url="https://www.annuaire-inverse-france.com/annuaire-entreprises/paris",
+            titre="MUSEE DU LOUVRE Paris - Annuaire inversé",
+            extrait=(
+                "MUSEE DU LOUVRE 34 quai francois mitterrand 75001 Paris 0140205050 "
+                "musées - Paris - Ile-de-France"
+            ),
+        ),
+        MentionWeb(
+            url="https://www.infobel.com/fr/france/musee_du_louvre/paris/FR108534803",
+            titre="Musée Du Louvre, Paris, FR | Informations sur l'entreprise",
+            extrait="Trouvez des informations sur cette entreprise, telles que...",
+        ),
+        MentionWeb(
+            url="https://telephone.fr/informations-musee-du-louvre/",
+            titre="Comment contacter Musée du Louvre : téléphone et coordonnées",
+            extrait="Pour contacter Musée du Louvre par téléphone, composez le 0140205050.",
+        ),
+        MentionWeb(
+            url="https://www.quinumero.info/numero/0140205050/",
+            titre="0140205050 - Commentaires: 7 (Négatif: 0) - Qui est ce numéro ...",
+            extrait=(
+                "À qui appartient ce numéro de téléphone?? Nombre d'opinions: 7. "
+                "Opinion majoritaire: indifférent"
+            ),
+        ),
+    ]
+
+
+def test_le_nom_de_lentite_est_extrait_des_pages_citant_le_numero(monkeypatch):
+    """Défaut mesuré le 02/08/2026 : le nom figurait dans six titres sur huit, et
+    l'outil ne rendait que des liens — l'analyste devait le lire lui-même."""
+    monkeypatch.setattr(
+        "app.moteur.sources.duckduckgo.rechercher_mentions",
+        lambda *a, **k: _mentions_du_louvre(),
+    )
+    resultat = ChercheurTelephone().chercher("+33140205050")
+
+    entreprises = resultat.valeurs_information(TypeDonnee.ENTREPRISE)
+    assert any("louvre" in valeur.lower() for valeur in entreprises), entreprises
+
+
+def test_ladresse_postale_est_extraite_des_extraits(monkeypatch):
+    monkeypatch.setattr(
+        "app.moteur.sources.duckduckgo.rechercher_mentions",
+        lambda *a, **k: _mentions_du_louvre(),
+    )
+    resultat = ChercheurTelephone().chercher("+33140205050")
+
+    lieux = resultat.valeurs_information(TypeDonnee.LOCALISATION)
+    assert any("75001" in valeur for valeur in lieux), lieux
+
+
+def test_les_pages_sans_contenu_sont_ecartees(monkeypatch):
+    """`quinumero.info` ne publie que des compteurs d'avis : il passait au travers de
+    la liste de domaines, d'où un critère fondé aussi sur le contenu."""
+    monkeypatch.setattr(
+        "app.moteur.sources.duckduckgo.rechercher_mentions",
+        lambda *a, **k: _mentions_du_louvre(),
+    )
+    resultat = ChercheurTelephone().chercher("+33140205050")
+
+    liens = resultat.valeurs_information(TypeDonnee.LIEN_EXTERNE)
+    assert not any("quinumero" in lien for lien in liens), liens
+
+
+def test_un_nom_cite_par_un_seul_site_ne_suffit_pas(monkeypatch):
+    """Un titre isolé peut dire n'importe quoi : il faut deux domaines concordants.
+
+    C'est ce qui évite d'affirmer une identité sur la foi d'une seule page — le cas
+    normal pour un numéro de particulier, où rien ne doit être nommé.
+    """
+    monkeypatch.setattr(
+        "app.moteur.sources.duckduckgo.rechercher_mentions",
+        lambda *a, **k: [
+            MentionWeb(
+                url="https://exemple-unique.fr/fiche",
+                titre="Cabinet Dupont et Associés - Exemple",
+                extrait="Un texte quelconque sans autre mention.",
+            )
+        ],
+    )
+    resultat = ChercheurTelephone().chercher("+33140205050")
+    assert resultat.valeurs_information(TypeDonnee.ENTREPRISE) == []
+
+
+def test_ladresse_ecarte_la_cartographie_et_limmobilier(monkeypatch):
+    """Mesuré le 02/08/2026 : la recherche par adresse n'appliquait aucun filtre et
+    rendait des itinéraires RATP, Bing Maps et des estimations MeilleursAgents."""
+    monkeypatch.setattr(
+        "app.moteur.sources.duckduckgo.rechercher_mentions",
+        lambda *a, **k: [
+            MentionWeb(url="https://www.ratp.fr/itineraires/55-rue", titre="Itinéraire", extrait=""),
+            MentionWeb(url="https://www.bing.com/maps?where=55", titre="Bing Maps", extrait=""),
+            MentionWeb(
+                url="https://www.meilleursagents.com/prix-immobilier/paris",
+                titre="Prix immobilier", extrait="",
+            ),
+            MentionWeb(
+                url="https://fr.wikipedia.org/wiki/Palais_de_l_Elysee",
+                titre="Palais de l'Élysée — Wikipédia", extrait="Résidence officielle.",
+            ),
+        ],
+    )
+    # Le géocodage n'est pas l'objet du test : seul le filtrage des mentions l'est.
+    chercheur = ChercheurAdresse()
+    monkeypatch.setattr(chercheur, "_chercher_ban", lambda *a, **k: False)
+    monkeypatch.setattr(chercheur, "_chercher_nominatim", lambda *a, **k: None)
+    resultat = chercheur.chercher("55 rue du Faubourg Saint-Honore, 75008 Paris")
+
+    liens = resultat.valeurs_information(TypeDonnee.LIEN_EXTERNE)
+    assert any("wikipedia" in lien for lien in liens), liens
+    for indesirable in ("ratp.fr", "bing.com", "meilleursagents"):
+        assert not any(indesirable in lien for lien in liens), (indesirable, liens)

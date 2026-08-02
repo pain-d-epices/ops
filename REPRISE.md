@@ -4,6 +4,48 @@ Point d'étape au **02/08/2026**.
 
 ## État : application vérifiée de bout en bout
 
+### Téléphone et adresse : l'information trouvée est enfin exploitée (02/08/2026)
+
+Constat parti d'une question simple — « pourquoi la recherche par téléphone ne me rend
+que l'opérateur, le pays et des liens ? ». Trois causes distinctes, dont une seule était
+un vrai défaut.
+
+**Ce qui est normal et le restera.** `libphonenumber` ne lit que des plages
+d'attribution. Un **fixe ne renvoie aucun opérateur** (d'où l'impression qu'il ne reste
+que le pays), et sur mobile l'opérateur est celui du bloc d'origine — faux dès qu'il y a
+eu portabilité. Aucune source publique ne relie un numéro à une personne privée : les
+outils qui le font utilisent des carnets d'adresses aspirés, des bases de fuites ou
+l'énumération des messageries, tous exclus par le parti pris du projet.
+
+**Le vrai défaut.** L'outil trouvait la réponse et la jetait. Relevé en base après une
+recherche sur `+33140205050` : le nom du Louvre figurait dans **six titres sur huit** et
+l'adresse postale complète dans un extrait — le tout enregistré en `lien_externe` et
+rien d'autre. L'analyste devait ouvrir huit onglets pour lire ce que l'outil avait déjà
+collecté.
+
+Nouveau module `moteur/chercheurs/mentions.py`, partagé entre les chercheurs téléphone
+et adresse :
+
+- **nom d'entité par consensus** — retenu seulement s'il concorde sur au moins deux
+  domaines distincts. Un titre isolé peut dire n'importe quoi ; c'est le même principe
+  que la corrélation des comptes. Sur un numéro de particulier, rien ne fait consensus
+  et rien n'est nommé, ce qui est le comportement voulu ;
+- **adresse postale** reconnue à sa forme française, en excluant les chiffres du numéro
+  recherché pour ne pas prendre un fragment de téléphone pour un numéro de voie ;
+- **filtrage à deux critères** — la liste de domaines (élargie : `quinumero.info` et
+  consorts passaient au travers) *plus* un critère de contenu (« à qui appartient ce
+  numéro ? », « nombre d'opinions »), parce qu'une liste de domaines sera toujours en
+  retard sur le web.
+
+Le chercheur par **adresse** n'appliquait aucun filtre : il rendait des itinéraires
+RATP, Bing Maps et des estimations MeilleursAgents. Il utilise désormais le même
+module.
+
+Vérifié en conditions réelles : `+33140205050` produit `entreprise = « Musée Du Louvre »`
+et `localisation = « 34 quai francois mitterrand 75001 Paris »` ; `55 rue du Faubourg
+Saint-Honoré` produit `entreprise = « Palais de l'Élysée »`, sans les quatre domaines de
+cartographie qui polluaient le résultat. 240 tests au vert.
+
 ### Campagne d'évaluation et refonte de la corrélation (02/08/2026)
 
 Sept investigations réelles (les cinq types de recherche, le multi-critères, le rebond,

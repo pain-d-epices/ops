@@ -33,6 +33,42 @@ informations exploitables, et restitue l'ensemble sous forme de graphe de relati
 4. **Pivote** — repart automatiquement des informations découvertes (un pseudonyme dans une bio relance une recherche, un lien déclenche un enrichissement direct), dans la limite de la profondeur autorisée.
 5. **Visualise** — restitue le tout en graphe interactif : nœuds = identités et informations, arêtes = relations découvertes.
 
+### Téléphone et adresse : ce qu'on peut en tirer, et ce qu'on ne peut pas
+
+Ces deux recherches ne fonctionnent pas comme celle par pseudonyme, et il faut le dire
+clairement avant de les vendre.
+
+**Ce qui est structurellement impossible.** `libphonenumber` ne lit que des plages
+d'attribution : pays, région, type de ligne, et opérateur — *uniquement sur mobile*, un
+fixe n'en renvoie aucun. Cet opérateur est celui du **bloc d'attribution d'origine** :
+avec la portabilité, un numéro passé de SFR à Free affichera toujours SFR. À ne jamais
+présenter comme un fait. Surtout, **rien de public ne relie un numéro à une personne
+privée** : les outils qui le prétendent s'appuient sur des carnets d'adresses aspirés
+(Truecaller, GetContact), des bases de fuites ou l'énumération des messageries — tous
+exclus par le parti pris « APIs publiques gratuites uniquement ».
+
+**Ce que l'outil fait, désormais.** Quand le numéro est professionnel ou
+institutionnel, la réponse est écrite dans les pages qui le citent. L'outil les
+exploite au lieu de se contenter de les lister :
+
+- le **nom de l'entité** est retenu s'il concorde sur **au moins deux domaines
+  distincts** — un titre isolé peut dire n'importe quoi, deux sites indépendants se
+  corroborent ;
+- l'**adresse postale** est reconnue à sa forme française dans les extraits.
+
+Mesuré sur le standard du Louvre (`+33140205050`) : l'outil rendait huit liens et rien
+d'autre, alors que le nom figurait dans six titres sur huit et l'adresse dans un
+extrait. Il produit maintenant `entreprise = « Musée Du Louvre »` et
+`localisation = « 34 quai François Mitterrand 75001 Paris »`, exploitables par la
+corrélation et le rebond. Même chose par adresse : `55 rue du Faubourg Saint-Honoré`
+donne `entreprise = « Palais de l'Élysée »`.
+
+Les pages sans contenu propre sont écartées sur **deux critères** : une liste de
+domaines (annuaires inversés, cartographie, estimation immobilière) et, parce qu'une
+liste est toujours en retard sur le web, la présence de formulations creuses
+(« à qui appartient ce numéro ? », « nombre d'opinions »). Voir
+[`backend/app/moteur/chercheurs/mentions.py`](backend/app/moteur/chercheurs/mentions.py).
+
 ### Le score est explicable
 
 Chaque score s'accompagne du détail de son calcul : « 87 % — pseudonyme identique
@@ -501,7 +537,7 @@ votre-domaine.fr {
 cd backend && pytest -q
 ```
 
-235 tests couvrent le moteur de corrélation, les modules de site, les chercheurs et
+240 tests couvrent le moteur de corrélation, les modules de site, les chercheurs et
 points de départ multiples, les sources complémentaires (recherche web et dark web),
 les quotas et le gating par plan, l'isolation entre organisations, et le cycle complet
 d'investigation.
@@ -530,7 +566,7 @@ Les tests les plus importants à ne jamais laisser échouer :
 
 ## État du projet
 
-**Application complète et vérifiée de bout en bout** (235 tests automatisés, migration
+**Application complète et vérifiée de bout en bout** (240 tests automatisés, migration
 validée sur PostgreSQL 16).
 
 ### Campagne d'évaluation du 02/08/2026

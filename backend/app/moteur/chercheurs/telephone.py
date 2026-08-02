@@ -19,41 +19,19 @@ from typing import Any
 from app.config import config_metier
 from app.modeles.enums import TypeDonnee, TypePointDepart
 from app.moteur.chercheurs.base import Chercheur, RappelProgression, ResultatChercheur
+from app.moteur.chercheurs.mentions import (
+    adresse_postale,
+    est_domaine_sans_contenu,
+    est_mention_sans_contenu,
+    nom_entite_consensuel,
+)
 
 journal = logging.getLogger(__name__)
 
-#: Services d'annuaire inversé et de signalement d'appels. Ils génèrent une page pour
-#: **tout** numéro, y compris ceux qui n'existent pas : en trouver une n'apprend rien
-#: et masquerait les vraies pistes. Relevés en mesurant de vrais numéros le
-#: 01/08/2026 ; complétable sans toucher au reste du code.
-#:
-#: Les annuaires qui publient un *contenu* propre (nom de l'établissement, adresse)
-#: en sont volontairement absents : sur « 0140205050 », `annuaire-inverse-france.com`
-#: et `infobel.com` donnaient tous deux la réponse — « Musée du Louvre ».
-ANNUAIRES_INVERSES = frozenset({
-    "truecaller.com", "getcontact.com", "robokiller.com", "numlookup.com",
-    "whitepages.com", "thisnumber.com", "ipqualityscore.com", "who-called.co.uk",
-    "findwhocallsyou.com", "numtrace.com", "degulesider.dk", "spamcalls.net",
-    "shouldianswer.com", "callercenter.com", "phonenumbers.ie", "sync.me",
-    "tellows.fr", "tellows.com", "411.com", "appelinconnu.fr", "uisjournal.com",
-    "phonenumbers.org", "yellowpages.net", "usphonebook.com",
-})
-
-#: Domaines génériques renvoyés par le moteur quand la requête ressemble à une suite
-#: de chiffres : ce sont des outils, pas des pages mentionnant le numéro.
-DOMAINES_GENERIQUES = frozenset({
-    "google.com", "maps.google.com", "bing.com", "duckduckgo.com",
-    "calculatorsoup.com", "desmos.com", "w3calc.com",
-})
-
-
-def est_annuaire_inverse(domaine: str) -> bool:
-    """Ce domaine est-il un service générique plutôt qu'une page de contenu ?"""
-    domaine = (domaine or "").strip().lower().removeprefix("www.")
-    if not domaine:
-        return True
-    indesirables = ANNUAIRES_INVERSES | DOMAINES_GENERIQUES
-    return any(domaine == d or domaine.endswith("." + d) for d in indesirables)
+#: Le filtrage des annuaires sans contenu et l'exploitation des pages trouvées sont
+#: partagés avec le chercheur par adresse : voir `chercheurs/mentions.py`.
+#: `est_annuaire_inverse` reste exposé ici sous son nom d'origine.
+est_annuaire_inverse = est_domaine_sans_contenu
 
 
 LIBELLES_TYPE_LIGNE = {
@@ -211,9 +189,9 @@ class ChercheurTelephone(Chercheur):
 
         nb_max = int(config_metier().obtenir("telephone.mentions_max", 8))
         vues: set[str] = set()
-        retenues = 0
+        retenues: list = []
         for graphie in graphies:
-            if retenues >= nb_max:
+            if len(retenues) >= nb_max:
                 break
             if rappel:
                 rappel(1, 2, f"Recherche du numéro sur le web ({graphie})")
@@ -222,13 +200,14 @@ class ChercheurTelephone(Chercheur):
                 if cle in vues:
                     continue
                 vues.add(cle)
-                if est_annuaire_inverse(mention.domaine):
-                    # Ces sites publient une page pour *tout* numéro : en trouver une
-                    # ne prouve rien et noierait les vraies pistes.
+                if est_mention_sans_contenu(mention):
+                    # Ces sites publient une page pour *tout* numéro, ou n'affichent
+                    # que des compteurs d'avis : en trouver une ne prouve rien et
+                    # noierait les vraies pistes.
                     continue
-                if retenues >= nb_max:
+                if len(retenues) >= nb_max:
                     break
-                retenues += 1
+                retenues.append(mention)
                 resultat.ajouter_information(
                     TypeDonnee.LIEN_EXTERNE,
                     mention.url,
@@ -239,7 +218,44 @@ class ChercheurTelephone(Chercheur):
                 )
             resultat.nb_sources_consultees += 1
 
+        self._identifier_le_titulaire(retenues, resultat)
+
         journal.info(
-            "Numéro : %d page(s) consultée(s), %d retenue(s) après filtrage des annuaires",
-            len(vues), retenues,
+            "Numéro : %d page(s) consultée(s), %d retenue(s) après filtrage",
+            len(vues), len(retenues),
         )
+
+    def _identifier_le_titulaire(self, mentions: list, resultat: ResultatChercheur) -> None:
+        """Nomme l'entité et son adresse quand les pages trouvées s'accordent.
+
+        Sans cette étape, l'outil rendait huit liens et laissait l'analyste lire
+        lui-même ce qu'il avait déjà collecté : sur « 0140205050 », le nom du Louvre
+        figurait dans six titres sur huit et l'adresse postale dans un extrait
+        (mesuré le 02/08/2026).
+
+        Le résultat reste un **indice** : un numéro professionnel se rattache à un
+        établissement, pas à une personne. Rien ici ne prétend nommer le titulaire
+        d'un mobile privé — aucune source publique ne le permet.
+        """
+        if not mentions:
+            return
+
+        nom = nom_entite_consensuel(mentions)
+        if nom:
+            resultat.ajouter_information(
+                TypeDonnee.ENTREPRISE,
+                nom,
+                confiance=0.7,
+                source="nom concordant sur plusieurs pages citant le numéro",
+            )
+
+        adresse = adresse_postale(
+            mentions, numero_a_ignorer=resultat.detail.get("numero_normalise", "")
+        )
+        if adresse:
+            resultat.ajouter_information(
+                TypeDonnee.LOCALISATION,
+                adresse,
+                confiance=0.6,
+                source="adresse lue sur une page citant le numéro",
+            )

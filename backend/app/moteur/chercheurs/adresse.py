@@ -20,6 +20,7 @@ from app.config import config_metier
 from app.infra.http import ClientHttp, DebitDepasse, ErreurReseau
 from app.modeles.enums import TypeDonnee, TypePointDepart
 from app.moteur.chercheurs.base import Chercheur, RappelProgression, ResultatChercheur
+from app.moteur.chercheurs.mentions import est_mention_sans_contenu, nom_entite_consensuel
 
 journal = logging.getLogger(__name__)
 
@@ -95,7 +96,14 @@ class ChercheurAdresse(Chercheur):
         # expression entre guillemets, là où la même requête libre en renvoie six
         # (mesuré le 01/08/2026). L'adresse complète est assez discriminante pour
         # que la recherche libre suffise.
-        mentions = rechercher_mentions(requete, nb_max=nb_max)
+        brutes = rechercher_mentions(requete, nb_max=nb_max)
+
+        # Une adresse ramène surtout de la cartographie et de l'estimation immobilière
+        # (Bing Maps, itinéraires RATP, Mappy, MeilleursAgents — relevés le
+        # 02/08/2026) : ces pages parlent du *lieu*, jamais de qui s'y trouve. Ce
+        # filtrage manquait ici alors qu'il existait pour le téléphone.
+        mentions = [m for m in brutes if not est_mention_sans_contenu(m)]
+
         for mention in mentions:
             resultat.ajouter_information(
                 TypeDonnee.LIEN_EXTERNE,
@@ -105,9 +113,25 @@ class ChercheurAdresse(Chercheur):
                 titre=mention.titre,
                 extrait=mention.extrait,
             )
+
+        # Quand plusieurs pages nomment la même entité à cette adresse, c'est
+        # l'occupant : l'information la plus utile qu'une recherche par adresse
+        # puisse produire.
+        nom = nom_entite_consensuel(mentions)
+        if nom:
+            resultat.ajouter_information(
+                TypeDonnee.ENTREPRISE,
+                nom,
+                confiance=0.6,
+                source="nom concordant sur plusieurs pages citant l'adresse",
+            )
+
         if mentions:
             resultat.nb_sources_consultees += 1
-            journal.info("%d page(s) mentionnant l'adresse trouvée(s)", len(mentions))
+            journal.info(
+                "Adresse : %d page(s) trouvée(s), %d retenue(s) après filtrage",
+                len(brutes), len(mentions),
+            )
 
     def _chercher_ban(self, adresse: str, resultat: ResultatChercheur) -> bool:
         """Base Adresse Nationale : précise, gratuite, sans clé, pour la France."""
