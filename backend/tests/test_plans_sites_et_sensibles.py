@@ -44,10 +44,10 @@ def test_nombre_de_sites_borne_par_le_plan():
         _, organisation_id = _client("sites_plan@test.fr")
 
         gratuit = plan_actif(session, organisation_id)
-        assert gratuit.max_sites_analyses == 200
-        assert sites_analysables(gratuit, 3000) == 200
+        assert gratuit.max_sites_analyses == 100
+        assert sites_analysables(gratuit, 3000) == 100
         # Sans demande explicite, le défaut serveur (500) est lui aussi ramené au plan
-        assert sites_analysables(gratuit, None) == 200
+        assert sites_analysables(gratuit, None) == 100
         # Une demande inférieure au plafond est respectée
         assert sites_analysables(gratuit, 50) == 50
 
@@ -79,7 +79,7 @@ def test_nombre_de_sites_borne_a_la_creation_de_l_investigation():
         assert reponse.status_code == 201, reponse.text
 
         investigation = session.get(Investigation, reponse.json()["id"])
-        assert investigation.options["top_sites"] == 200
+        assert investigation.options["top_sites"] == 100
     finally:
         session.close()
 
@@ -207,7 +207,10 @@ def test_quotas_et_rebonds_des_quatre_paliers():
     détail technique : la grille est donc verrouillée par un test."""
     attendu = {
         # code : (recherches par mois, rebonds max, sites max)
-        "free": (15, 0, 200),
+        # Le palier gratuit a été refondu le 02/08/2026 : moins de volume (10 au lieu
+        # de 15) et moins de sites (100 au lieu de 200), mais un niveau de rebond et
+        # l'enrichissement, sans quoi il ne démontrait pas la corrélation qu'il vend.
+        "free": (10, 1, 100),
         "starter": (100, 2, 1000),
         "pro": (500, 5, 0),
         "entreprise": (2500, 10, 0),

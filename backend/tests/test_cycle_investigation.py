@@ -253,7 +253,12 @@ def _pivots_de_test(session, investigation, score_minimal=0):
     return DetecteurPivot().detecter(candidates)
 
 
-def test_plan_gratuit_bloque_totalement_le_pivot(runner_factice):
+def test_plan_gratuit_propose_un_rebond_mais_ne_lexecute_jamais(runner_factice):
+    """Le palier gratuit dispose d'un niveau de rebond, en mode supervisé uniquement.
+
+    Il faut donc qu'il *propose* — c'est ce qui démontre la fonctionnalité — sans
+    jamais lancer de recherche de lui-même : le rebond automatique reste payant.
+    """
     investigation_id, organisation_id = _preparer_investigation("pivot_gratuit@test.fr")
     session = FabriqueSession()
     try:
@@ -275,9 +280,37 @@ def test_plan_gratuit_bloque_totalement_le_pivot(runner_factice):
         organisation = session.get(Organisation, organisation_id)
         plan = plan_actif(session, organisation_id)
         decision = OrchestrateurPivot(session, investigation, organisation, plan).arbitrer(pivots, 0)
+        session.commit()
+
+        assert len(decision.a_executer) == 0, "le rebond automatique reste payant"
+        assert len(decision.en_attente) >= 1
+    finally:
+        session.close()
+
+
+def test_plan_gratuit_bloque_le_rebond_au_dela_du_premier_niveau(runner_factice):
+    """Un seul niveau : au niveau 1, plus rien n'est retenu, même en supervisé."""
+    investigation_id, organisation_id = _preparer_investigation("pivot_gratuit2@test.fr")
+    session = FabriqueSession()
+    try:
+        investigation = session.get(Investigation, investigation_id)
+        execution = ExecutionRecherche(
+            investigation_id=investigation.id, organisation_id=organisation_id,
+            pseudo_recherche="jeanmartin", profondeur=0, statut="terminee",
+        )
+        session.add(execution)
+        session.flush()
+        enregistrer_resultats_maigret(
+            session, investigation, execution, runner_factice.lancer("jeanmartin")
+        )
+        rescorer_investigation(session, investigation)
+
+        pivots = _pivots_de_test(session, investigation)
+        organisation = session.get(Organisation, organisation_id)
+        plan = plan_actif(session, organisation_id)
+        decision = OrchestrateurPivot(session, investigation, organisation, plan).arbitrer(pivots, 1)
 
         assert decision.total_retenus == 0
-        assert all("plan" in raison for _, raison in decision.ignores)
     finally:
         session.close()
 

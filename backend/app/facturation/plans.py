@@ -94,23 +94,32 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         nom_affiche="Gratuit",
         description=(
             "Découverte : recherche par pseudonyme ou adresse électronique sur les "
-            "200 principaux sites, et corrélation de base. Modules d'enrichissement "
-            "et rebond non inclus."
+            "100 principaux sites, enrichissement des comptes trouvés et un niveau "
+            "de rebond, pour juger sur pièces de la qualité de la corrélation."
         ),
         prix_mensuel_cents=0,
         ordre=0,
-        quota_recherches_mois=15,
-        quota_enrichissements_mois=0,
+        # Volume délibérément réduit par rapport aux 15 recherches précédentes : ce
+        # palier sert à *démontrer*, pas à produire. Mieux vaut dix recherches
+        # concluantes que quinze listes plates.
+        quota_recherches_mois=10,
+        quota_enrichissements_mois=50,
         quota_utilisateurs=1,
         quota_investigations_actives=3,
-        profondeur_pivot_max=0,
-        # Seule la recherche par adresse électronique est ouverte en plus du
-        # pseudonyme, ce dernier n'exigeant aucune fonctionnalité (c'est la base).
-        # Téléphone, adresse postale, départ depuis un compte et combinaison de
-        # plusieurs éléments restent réservés aux paliers payants.
-        fonctionnalites=[RECHERCHE_EMAIL],
+        # Un seul niveau de rebond, et en mode supervisé faute de PIVOT_AUTOMATIQUE :
+        # de quoi voir la fonctionnalité vivre une fois, pas de quoi mener une
+        # investigation en profondeur.
+        profondeur_pivot_max=1,
+        # MODULES et PIVOT sont ouverts : sans eux, le palier gratuit rendait une
+        # liste de comptes tous notés à l'identique, sans le moindre écart de score
+        # (mesuré le 02/08/2026 sur « torvalds » : 84 résultats, 82 à 65 % et aucun
+        # en confiance élevée). Il démontrait donc exactement le contraire de ce que
+        # le produit vend. Ce qui reste payant : le volume, la profondeur, la
+        # couverture en sites, les types de recherche spécialisés, la recherche web
+        # étendue, les exports et les sites sensibles.
+        fonctionnalites=[RECHERCHE_EMAIL, MODULES, PIVOT],
         max_points_depart=1,
-        max_sites_analyses=200,
+        max_sites_analyses=100,
     ),
     DefinitionPlan(
         code="starter",
@@ -178,11 +187,12 @@ PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
         quota_utilisateurs=50,
         quota_investigations_actives=2000,
         profondeur_pivot_max=10,
-        # Seul palier ouvrant l'accès API — et encore : la fonctionnalité n'est pas
-        # construite (voir le commentaire d'`API_PUBLIQUE` plus haut).
+        # API_PUBLIQUE volontairement absent : la fonctionnalité n'est pas construite
+        # (voir son commentaire plus haut) et ne doit pas apparaître comme disponible
+        # dans la grille commerciale.
         fonctionnalites=[
             MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
-            API_PUBLIQUE, RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,
+            RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,
             RECHERCHE_ETENDUE, *RECHERCHES_SPECIALISEES,
         ],
         # 0 = pas de limite : les investigations complexes de ce palier peuvent

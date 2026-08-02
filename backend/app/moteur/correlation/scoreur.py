@@ -11,6 +11,12 @@ Deux principes gouvernent le calcul :
    identique est un indice, pas une preuve : sur un pseudonyme courant, des dizaines de
    personnes sans lien entre elles le partagent. Le score est donc plafonné selon le
    nombre de signaux positifs indépendants qui corroborent l'appartenance.
+
+3. **Un compte sur site à caractère sexuel n'est jamais présenté comme probable sans
+   corroboration indépendante.** C'est la donnée la plus lourde de conséquences qu'une
+   investigation puisse produire sur une personne : l'annoncer sur la seule foi d'un
+   pseudonyme identique est une imputation diffamatoire, et au RGPD un traitement de
+   données de l'article 9 fondé sur un faux positif.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from app.config import config_metier
 from app.modeles.enums import NiveauConfiance
 from app.moteur.correlation.base import ContexteCorrelation, ProfilEvalue
 from app.moteur.correlation.registre import charger_regles
+from app.moteur.sites_sensibles import est_site_sensible
 
 journal = logging.getLogger(__name__)
 
@@ -36,6 +43,12 @@ PLAFOND_MAXIMAL = 100
 # Un signal n'est « positif » qu'au-dessus de ce score : une règle qui se prononce
 # faiblement en faveur du profil ne constitue pas une corroboration.
 SEUIL_SIGNAL_POSITIF = 0.5
+
+# Nombre de signaux positifs indépendants exigés avant qu'un compte sur site à
+# caractère sexuel puisse dépasser la confiance « faible ». Un pseudonyme identique
+# seul n'y suffit donc jamais : il faut un avatar commun, une adresse partagée ou un
+# lien explicite — quelque chose que l'homonymie ne produit pas.
+SIGNAUX_MINIMAUX_SITE_SENSIBLE = 2
 
 
 @dataclass
@@ -72,6 +85,17 @@ def niveau_depuis_score(score: int) -> NiveauConfiance:
     return NiveauConfiance.FAIBLE
 
 
+def _plafond_site_sensible() -> int:
+    """Score maximal d'un compte sensible non corroboré : juste sous « confiance moyenne ».
+
+    Calculé depuis le seuil configuré plutôt que codé en dur : abaisser
+    `correlation.seuils.moyen` dans config.yaml ne doit pas faire réapparaître ces
+    comptes au-dessus du seuil.
+    """
+    seuils = config_metier().obtenir("correlation.seuils", {}) or {}
+    return max(0, int(seuils.get("moyen", 40)) - 1)
+
+
 def scorer_profil(profil: ProfilEvalue, contexte: ContexteCorrelation) -> ResultatScoring:
     """Calcule le score d'un profil et détaille la contribution de chaque règle."""
     contributions: list[ContributionRegle] = []
@@ -92,7 +116,7 @@ def scorer_profil(profil: ProfilEvalue, contexte: ContexteCorrelation) -> Result
         score_borne = max(-1.0, min(1.0, resultat.score))
         somme_ponderee += score_borne * regle.poids
         somme_poids += regle.poids
-        if score_borne >= SEUIL_SIGNAL_POSITIF:
+        if score_borne >= SEUIL_SIGNAL_POSITIF and regle.compte_pour_plafond:
             nb_signaux_positifs += 1
 
         contributions.append(
@@ -114,6 +138,16 @@ def scorer_profil(profil: ProfilEvalue, contexte: ContexteCorrelation) -> Result
         moyenne = somme_ponderee / somme_poids          # -1 .. 1
         brut = max(0.0, min(1.0, moyenne)) * 100        # les scores négatifs deviennent 0
         plafond = PLAFONDS_PAR_NOMBRE_DE_SIGNAUX.get(nb_signaux_positifs, PLAFOND_MAXIMAL)
+
+        # Site à caractère sexuel non corroboré : maintenu sous le seuil de confiance
+        # « moyenne », pour qu'il se présente comme une piste à vérifier et non comme
+        # une conclusion. Voir le principe 3 en tête de module.
+        if (
+            nb_signaux_positifs < SIGNAUX_MINIMAUX_SITE_SENSIBLE
+            and est_site_sensible(profil.site_nom, profil.site_domaine, profil.tags)
+        ):
+            plafond = min(plafond, _plafond_site_sensible())
+
         score_final = int(round(min(brut, plafond)))
         # Le plafond n'est signalé que s'il a réellement rogné le score
         plafond = plafond if brut > plafond else None

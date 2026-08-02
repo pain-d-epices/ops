@@ -21,6 +21,11 @@ from app.moteur.correlation.base import (
 class RegleCoherenceTemporelle(RegleCorrelation):
     nom = "coherence_temporelle"
     libelle = "Cohérence des dates de création"
+    # Un pseudonyme identique combiné à une simple cohérence de date (tolérance de
+    # plusieurs années, voir `ecart_max_jours`) ne prouve rien : deux homonymes ont
+    # de bonnes chances de créer leurs comptes dans la même décennie. Ce signal ne
+    # doit donc jamais suffire, à lui seul, à lever le plafond du pseudonyme seul.
+    compte_pour_plafond = False
 
     def evaluer(self, profil: ProfilEvalue, contexte: ContexteCorrelation) -> ResultatRegle | None:
         date_profil = profil.date_creation()

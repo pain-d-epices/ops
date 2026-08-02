@@ -1,8 +1,64 @@
 # Où reprendre
 
-Point d'étape au **31/07/2026**.
+Point d'étape au **02/08/2026**.
 
 ## État : application vérifiée de bout en bout
+
+### Campagne d'évaluation et refonte de la corrélation (02/08/2026)
+
+Sept investigations réelles (les cinq types de recherche, le multi-critères, le rebond,
+les paliers gratuit et Pro), puis **vérification manuelle** des URL remontées — code
+HTTP *et* contenu de page, ce que les tests automatisés ne font pas.
+
+Le constat central contredit l'intuition de départ : **Maigret fonctionne**. Sur 45 URL
+« torvalds » ouvertes à la main, 73 % renvoient un vrai profil consultable, 18 % sont
+bloquées par un pare-feu anti-robot, et seules 9 % sont de faux positifs francs
+(`discord.com`, `bit.ly`, `bitbucket.org`, `donationalerts.com` — pages génériques sans
+identifiant). Le problème n'était pas la découverte, mais **l'homonymie** :
+`instagram.com/torvalds` = « Marco Migozzi », `untappd.com/torvalds` = « Torvald
+Storaas », Steam = « WTF Gaming », Indonésie. Les modules avaient extrait ces noms ; le
+moteur les ignorait et laissait ces comptes à 65 %, « confiance moyenne ».
+
+Sept correctifs, tous vérifiés en conditions réelles :
+
+1. **Départ depuis un compte connu — bogue bloquant.** `investigation.pseudo_initial`
+   contenait l'URL brute, d'où un pseudonyme de référence « httpsgithubcomsoxoj » : tous
+   les comptes étaient pénalisés pour dissimilarité et le compte GitHub *fourni par
+   l'analyste* obtenait **0 %**. Nouvelle fonction `pseudos_reference()` dans
+   `services/investigation.py`, appliquée aux trois points d'appel (corrélation,
+   détecteur de pivot ×2). GitHub remonte à 88 %.
+2. **`coherence_temporelle` ne lève plus le plafond de score.** Sa tolérance de trois
+   ans se déclenchait sur presque tout compte daté et suffisait, avec le seul
+   pseudonyme, à franchir le seuil « 2 signaux = 85 ». Nouvel attribut
+   `RegleCorrelation.compte_pour_plafond`.
+3. **Nouvelle règle `identite_contradictoire`** — la seule qui sache dire *non*. Un nom
+   d'au moins deux mots, étranger au pseudonyme comme aux autres comptes, vaut −0.7.
+   Trois précautions tirées de cas réels : deux comptes au même nom étranger ne se
+   corroborent pas (Instagram + Pinterest = « Marco Migozzi ») ; un nom recopié du
+   pseudonyme par le site ne compte pas (« Torvalds Torvalds » sur SoundCloud) ; un nom
+   d'un seul mot n'est pas une identité civile (« NaraKa »).
+4. **Sites sensibles plafonnés en confiance faible** sans corroboration indépendante.
+   OnlyFans, Xvideos et ChaturBate passent de 65 % à 39 %.
+5. **Comptes non corroborés repliés** dans l'interface, derrière « *N* comptes au
+   pseudonyme identique, non vérifiés ». Nouveau champ API `nb_signaux_corroborants`,
+   calculé en une requête agrégée avec la même définition que le plafonnement.
+6. **Palier gratuit refondu** : 10 recherches sur 100 sites (au lieu de 15 sur 200),
+   mais avec enrichissement et **un** niveau de rebond supervisé. Il rendait 84 comptes
+   dont zéro en confiance élevée — il démontrait le contraire de ce qu'il vend.
+7. **« Accès API » retiré** de la grille tarifaire : rien ne l'implémente.
+
+Effet global mesuré sur « torvalds » (500 sites) : de **123 comptes indifférenciés à 5**
+affichés par défaut. Palier gratuit : de 84 comptes / 0 en confiance élevée à 52 / 5,
+avec 3 rebonds proposés.
+
+**Un piège rencontré, à retenir** : le worker Celery ne recharge pas le code (pas de
+`--reload`). Toute modification du moteur de corrélation exige de le **redémarrer**,
+sinon les scores recalculés restent ceux de l'ancienne version — ce qui donne
+l'impression que le correctif ne marche pas.
+
+235 tests au vert. Les limites connues et **non résolues** (agrégation par moyenne
+pondérée qui fausse l'ordre, homonymes de la même famille, faux positifs structurels de
+Maigret) sont listées dans le README, section « Limites connues ».
 
 ### Export PDF, double authentification, migration Stripe (31/07/2026)
 

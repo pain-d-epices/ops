@@ -123,6 +123,12 @@ class ProfilResume(BaseModel):
     profondeur: int
     enrichi: bool
     module_utilise: str | None
+    #: Nombre de signaux positifs indépendants corroborant l'appartenance du compte.
+    #: À 1, le compte ne repose que sur son pseudonyme : c'est une piste, pas un
+    #: résultat, et l'interface la replie pour ne pas noyer les vraies trouvailles.
+    #: Les règles non discriminantes (cohérence des dates) n'y sont pas comptées,
+    #: exactement comme pour le plafonnement du score.
+    nb_signaux_corroborants: int = 0
 
 
 class ProfilDetaille(ProfilResume):

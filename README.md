@@ -40,13 +40,48 @@ Chaque score s'accompagne du détail de son calcul : « 87 % — pseudonyme iden
 Un analyste peut donc **contester** une conclusion plutôt que la subir. C'est
 indispensable quand la sortie sert à identifier une personne réelle.
 
-Deux garde-fous limitent les faux positifs :
+Quatre garde-fous limitent les faux positifs :
 
 - **un signal unique ne peut jamais atteindre la confiance élevée** — un pseudonyme
   identique est un indice, pas une preuve : sur un pseudonyme courant, des dizaines de
   personnes sans lien entre elles le partagent ;
+- **l'identité déclarée peut faire *baisser* un score** : un compte qui annonce un nom
+  sans rapport avec le pseudonyme recherché ni avec les autres comptes est déclassé
+  comme homonyme probable (voir ci-dessous) ;
 - les résultats obtenus par recherche approximative et les sites connus pour répondre
-  « ce compte existe » à n'importe quelle requête sont **pénalisés**.
+  « ce compte existe » à n'importe quelle requête sont **pénalisés** ;
+- un compte sur **site à caractère sexuel** reste en confiance faible tant qu'aucune
+  preuve indépendante du pseudonyme ne le corrobore.
+
+### L'homonymie est le vrai mode d'échec, et elle est traitée
+
+Vérification manuelle du 02/08/2026, en ouvrant les comptes remontés sur
+« torvalds » : **ils existent presque tous** — 73 % des URL testées renvoient un vrai
+profil consultable. Le problème n'est donc pas que l'outil invente des comptes, mais
+qu'il en trouve **appartenant à d'autres personnes** : `instagram.com/torvalds`
+déclare « Marco Migozzi », `untappd.com/torvalds` « Torvald Storaas », le compte Steam
+« WTF Gaming », domicilié en Indonésie.
+
+Le moteur exploite désormais ces noms au lieu de les ignorer. Trois précautions, toutes
+tirées de cas réels mesurés :
+
+- deux comptes portant le **même nom étranger** au pseudonyme ne se corroborent pas :
+  Instagram et Pinterest déclaraient tous deux « Marco Migozzi » — c'est l'indice qu'un
+  tiers possède ce pseudonyme sur plusieurs plateformes, pas qu'il s'agit de la cible ;
+- un nom **recopié du pseudonyme** par le site (« Torvalds Torvalds » sur SoundCloud)
+  ne compte pas : ce serait la même information votant deux fois ;
+- un nom d'un seul mot (« NaraKa ») n'est pas une identité civile : la règle s'abstient
+  plutôt que de pénaliser un compte légitime.
+
+Résultat mesuré sur la même recherche : la liste exploitable passe de **123 comptes
+indifférenciés à 5**, les homonymes vérifiés retombant de « confiance moyenne » à 23–43 %.
+
+### Les comptes non corroborés sont repliés
+
+Un compte qui ne repose que sur son pseudonyme n'est pas un résultat, c'est une piste.
+L'interface les regroupe donc derrière un « *N* comptes au pseudonyme identique, non
+vérifiés », dépliable d'un clic. Les afficher au même rang que les comptes corroborés
+noyait les quelques trouvailles utiles et laissait croire à une conclusion.
 
 ---
 
@@ -55,37 +90,49 @@ Deux garde-fous limitent les faux positifs :
 | | Gratuit | Starter | Pro | Entreprise |
 |---|---|---|---|---|
 | Prix mensuel | 0 € | 29 € | 99 € | 299 € |
-| **Recherches / mois** | 15 | 100 | 500 | 2500 |
-| **Rebonds (profondeur de pivot)** | ❌ | 2 | 5 | 10 |
-| **Sites analysés par recherche** | 200 | 1000 | tous | tous |
-| Enrichissements / mois | — | 500 | 5000 | 50 000 |
+| **Recherches / mois** | 10 | 100 | 500 | 2500 |
+| **Rebonds (profondeur de pivot)** | 1 | 2 | 5 | 10 |
+| **Sites analysés par recherche** | 100 | 1000 | tous | tous |
+| Enrichissements / mois | 50 | 500 | 5000 | 50 000 |
 | Utilisateurs | 1 | 3 | 10 | 50 |
 | Recherche par pseudonyme | ✅ | ✅ | ✅ | ✅ |
 | Recherche par e-mail | ✅ | ✅ | ✅ | ✅ |
 | Recherche par téléphone, adresse, compte | ❌ | ✅ | ✅ | ✅ |
 | **Résultats de sites sensibles** | ❌ | ✅ | ✅ | ✅ |
-| Modules par site | ❌ | ✅ | ✅ | ✅ |
+| Modules par site | ✅ (50/mois) | ✅ | ✅ | ✅ |
 | Recherche web et dark web | ❌ | ✅ | ✅ | ✅ |
 | Éléments de départ par investigation | 1 | 2 | 5 | illimité |
-| Pivot | ❌ | supervisé | automatique | automatique |
+| Pivot | supervisé (1 niveau) | supervisé | automatique | automatique |
 | Export CSV / PDF | ❌ | CSV | CSV + PDF | CSV + PDF |
 
-> **Accès API : pas encore construit.** Le code de fonctionnalité existe et n'est
-> accordé qu'au palier Entreprise, mais rien ne le vérifie — ni clé, ni
-> authentification machine. À ne pas annoncer comme disponible dans une page de vente.
+> **Accès API : pas construit, et retiré de la grille.** Le code de fonctionnalité
+> (`API_PUBLIQUE`) existe mais rien ne le vérifie — ni clé, ni authentification
+> machine. Il n'est donc plus accordé au palier Entreprise ni affiché sur la page
+> Abonnement : annoncer une fonctionnalité inexistante sur un palier à 299 €/mois est
+> un risque commercial et juridique direct. À rétablir le jour où elle existera.
 > État des lieux et travail restant : [docs/acces-api.md](docs/acces-api.md).
 
-Le palier gratuit sert la **découverte** : il permet de juger la qualité de la
-corrélation sur les deux points de départ les plus courants — un pseudonyme et une
-adresse électronique — sans ouvrir ce qui fait la valeur du produit. Trois curseurs
-portent la montée en gamme, tous liés au coût réel d'infrastructure : le volume mensuel,
-la profondeur de rebond (chaque niveau multiplie les requêtes sortantes) et le nombre de
-sites analysés (environ 0,25 s par site).
+Le palier gratuit sert la **démonstration**. Il incluait auparavant 15 recherches sur
+200 sites, mais ni enrichissement ni rebond — et rendait donc une liste de comptes tous
+notés à l'identique (mesuré le 02/08/2026 : 84 résultats, 82 à 65 %, **aucun** en
+confiance élevée). Il prouvait exactement le contraire de ce que le produit vend. Il
+offre désormais moins de volume mais une chaîne complète : enrichissement des comptes
+trouvés et un niveau de rebond, de quoi juger sur pièces. Même recherche après refonte :
+52 comptes, dont **5 en confiance élevée** et 3 rebonds proposés.
+
+Ce qui reste payant : le volume, la profondeur au-delà d'un niveau, le rebond
+**automatique** (le gratuit propose, il n'exécute jamais de lui-même), la couverture en
+sites, les types de recherche spécialisés, la recherche web étendue, les exports et les
+sites sensibles.
 
 Les **sites sensibles** (pornographie) sont exclus du palier gratuit : c'est une limite
 commerciale, mais aussi une précaution, ce type de compte étant la donnée la plus
 sensible qu'une investigation puisse révéler. Voir
 [`backend/app/moteur/sites_sensibles.py`](backend/app/moteur/sites_sensibles.py).
+Sur les paliers payants, un tel compte reste par ailleurs en **confiance faible** tant
+qu'il ne repose que sur un pseudonyme identique : l'imputer à quelqu'un sur cette seule
+base serait diffamatoire, et au RGPD un traitement de données de l'article 9 fondé sur
+un faux positif.
 
 Ces restrictions sont appliquées **côté serveur** (endpoints *et* tâches de fond),
 jamais seulement par masquage d'un bouton.
@@ -454,7 +501,7 @@ votre-domaine.fr {
 cd backend && pytest -q
 ```
 
-188 tests couvrent le moteur de corrélation, les modules de site, les chercheurs et
+235 tests couvrent le moteur de corrélation, les modules de site, les chercheurs et
 points de départ multiples, les sources complémentaires (recherche web et dark web),
 les quotas et le gating par plan, l'isolation entre organisations, et le cycle complet
 d'investigation.
@@ -483,10 +530,31 @@ Les tests les plus importants à ne jamais laisser échouer :
 
 ## État du projet
 
-**Application complète et vérifiée de bout en bout** (134 tests automatisés, migration
+**Application complète et vérifiée de bout en bout** (235 tests automatisés, migration
 validée sur PostgreSQL 16).
 
-Parcours réellement exécuté le 29/07/2026, avec Maigret sur de vrais pseudonymes :
+### Campagne d'évaluation du 02/08/2026
+
+Sept investigations réelles couvrant les cinq types de recherche, le multi-critères, le
+rebond et les deux paliers extrêmes, suivies d'une vérification **manuelle** des URL
+remontées (code HTTP *et* contenu de la page).
+
+| Constat | Suite donnée |
+|---|---|
+| Départ depuis un compte connu : le pseudonyme de référence était l'URL entière, tous les scores s'effondraient (GitHub à **0 %**) | Corrigé — `pseudos_reference()` déduit le pseudonyme du type de point de départ. GitHub remonte à 88 % |
+| `coherence_temporelle` (tolérance 3 ans) comptait comme second signal et hissait n'importe quel homonyme à 85 % | Corrigé — attribut `compte_pour_plafond`, la règle ne lève plus le plafond |
+| 73 % des comptes remontés existent vraiment, mais appartiennent à des **homonymes** ; aucune règle ne savait dire non | Nouvelle règle `identite_contradictoire` (seule règle à score négatif) |
+| Comptes pornographiques présentés à 65 %, « confiance moyenne », sur un simple pseudonyme | Plafonnés en confiance faible sans corroboration indépendante |
+| 119 des 123 résultats affichés au même rang, tous à 65 % | Repliés derrière « *N* comptes au pseudonyme identique, non vérifiés » |
+| Palier gratuit : 84 résultats, 0 en confiance élevée — il démontrait l'inverse de ce qu'il vend | Refondu : moins de volume, mais enrichissement et 1 rebond |
+| « Accès API » vendu au palier Entreprise alors que rien ne l'implémente | Retiré de la grille et de la page Abonnement |
+
+Effet mesuré sur la recherche « torvalds » (500 sites) : la liste exploitable passe de
+**123 comptes indifférenciés à 5**. Les homonymes vérifiés à la main retombent de
+« confiance moyenne » à 23–43 % (Instagram/« Marco Migozzi » 43 %, Steam/« WTF Gaming »
+23 %), tandis que GitHub et GitHubGist conservent 78 % sur trois signaux réels.
+
+Parcours antérieur, exécuté le 29/07/2026 avec Maigret sur de vrais pseudonymes :
 
 | Étape vérifiée | Résultat observé |
 |---|---|
@@ -509,6 +577,29 @@ Restent à faire :
   « Facturation via Stripe » ci-dessus) ;
 - **volet juridique avant commercialisation** : base légale, AIPD, contrat de
   sous-traitance client — voir [docs/rgpd.md](docs/rgpd.md).
+
+### Limites connues, mesurées et non résolues
+
+À garder en tête avant toute démonstration commerciale — ce sont des limites de
+conception, pas des bogues :
+
+- **Le score est une moyenne pondérée**, donc un compte à trois signaux peut passer
+  *sous* un compte à deux signaux plus francs : sur « torvalds », GitHub (78 %, trois
+  signaux dont l'avatar) se classe derrière Snapchat (82 %, deux signaux). Corriger
+  suppose de revoir l'agrégation elle-même, pas d'ajouter une règle.
+- **Les homonymes de la même famille sont indétectables** : « Patricia Torvalds » et
+  « Patrick Torvalds » partagent légitimement le patronyme de la cible et remontent
+  donc en confiance élevée. C'est arguablement le bon comportement — ce sont les
+  comptes qu'un analyste doit examiner en premier — mais ce ne sont pas la cible.
+- **Quatre faux positifs structurels de Maigret** subsistent, où la « page de profil »
+  est une page générique sans identifiant : `discord.com`, `bit.ly`, `bitbucket.org`,
+  `donationalerts.com`. À traiter par une liste de domaines, comme `site_douteux`.
+- **Environ 18 % des comptes remontés sont invérifiables** automatiquement : le site
+  répond derrière un pare-feu anti-robot (Cloudflare « Just a moment… »). Ni l'outil ni
+  l'analyste ne peuvent conclure sans ouvrir la page à la main.
+- **La couverture des modules reste marginale** : 22 modules pour ~3200 sites, soit
+  moins de 10 % des résultats enrichis sur une recherche large. L'essentiel du corpus
+  reste des URL nues.
 
 ## Crédits
 

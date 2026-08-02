@@ -17,7 +17,14 @@ from app.facturation.garde import (
     mode_pivot_effectif,
     profondeur_pivot_autorisee,
 )
-from app.facturation.plans import MODULES, PIVOT, PIVOT_AUTOMATIQUE
+from app.facturation.plans import (
+    EXPORT_CSV,
+    MODULES,
+    PIVOT,
+    PIVOT_AUTOMATIQUE,
+    RECHERCHE_ETENDUE,
+    SITES_SENSIBLES,
+)
 from app.facturation.quotas import (
     QuotaDepasse,
     consommer_quota,
@@ -148,18 +155,32 @@ def test_quota_mensuel_bloque_meme_apres_cloture_des_investigations():
 # --- Gating par plan -------------------------------------------------------
 
 
-def test_plan_gratuit_sans_modules_ni_pivot():
+def test_plan_gratuit_demontre_la_correlation_sans_ouvrir_le_produit():
+    """Le palier gratuit inclut enrichissement et un rebond depuis le 02/08/2026.
+
+    Sans eux, il rendait une liste de comptes tous notés à l'identique : il démontrait
+    le contraire de ce que le produit vend. Ce qui reste payant est vérifié ici même —
+    volume, profondeur au-delà d'un niveau, rebond automatique, exports, sites
+    sensibles et recherche web étendue.
+    """
     session = FabriqueSession()
     try:
         _, organisation_id = _client("gratuit@test.fr")
         plan = plan_actif(session, organisation_id)
 
-        assert not plan.possede(MODULES)
-        assert not plan.possede(PIVOT)
-        assert plan.profondeur_pivot_max == 0
+        # Ce que le palier gratuit démontre désormais
+        assert plan.possede(MODULES)
+        assert plan.possede(PIVOT)
+        assert plan.profondeur_pivot_max == 1
+
+        # Ce qu'il n'ouvre toujours pas
+        assert not plan.possede(PIVOT_AUTOMATIQUE)
+        assert not plan.possede(EXPORT_CSV)
+        assert not plan.possede(SITES_SENSIBLES)
+        assert not plan.possede(RECHERCHE_ETENDUE)
 
         with pytest.raises(FonctionnaliteIndisponible):
-            exiger_fonctionnalite(plan, MODULES)
+            exiger_fonctionnalite(plan, EXPORT_CSV)
     finally:
         session.close()
 
@@ -208,8 +229,8 @@ def test_profondeur_bornee_par_le_plan_puis_par_le_serveur():
         organisation = session.get(Organisation, organisation_id)
 
         plan_gratuit = plan_actif(session, organisation_id)
-        # Une demande de profondeur 9 sur le palier gratuit doit tomber à 0
-        assert profondeur_pivot_autorisee(plan_gratuit, organisation, 9) == 0
+        # Une demande de profondeur 9 sur le palier gratuit doit tomber à 1
+        assert profondeur_pivot_autorisee(plan_gratuit, organisation, 9) == 1
 
         passer_au_plan(session, organisation_id, "starter")
         plan_starter = plan_actif(session, organisation_id)
@@ -239,7 +260,7 @@ def test_options_client_bornees_a_la_creation():
     )
     assert reponse.status_code == 201
     options = reponse.json()["options"]
-    assert options["profondeur"] == 0                 # palier gratuit
+    assert options["profondeur"] == 1                 # palier gratuit : un seul niveau
     assert options["mode_pivot"] == "supervise"       # automatique non inclus
 
 

@@ -193,6 +193,12 @@ export interface ProfilResume {
   profondeur: number;
   enrichi: boolean;
   module_utilise: string | null;
+  /**
+   * Signaux positifs indépendants corroborant l'appartenance du compte. À 1, le
+   * compte ne repose que sur son pseudonyme : c'est une piste à vérifier, pas un
+   * résultat. Le tableau les replie pour ne pas noyer les vraies trouvailles.
+   */
+  nb_signaux_corroborants: number;
 }
 
 export interface DonneeExtraite {

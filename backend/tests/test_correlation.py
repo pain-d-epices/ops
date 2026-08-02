@@ -79,6 +79,7 @@ def test_les_regles_sont_toutes_decouvertes():
     assert {
         "pseudo_similarite", "avatar_phash", "liens_croises",
         "coherence_temporelle", "contenu_bio", "email_partage", "site_douteux",
+        "identite_contradictoire",
     } <= noms
 
 
@@ -219,3 +220,197 @@ def test_variantes_de_pseudo_restent_credibles(pseudo_trouve: str, attendu_minim
     cible = profil("1", pseudo_trouve)
     contexte = ContexteCorrelation(pseudos_reference=["jeanmartin"], profils=[cible])
     assert scorer_profil(cible, contexte).score >= attendu_minimal
+
+
+# --- Écartement des homonymes ----------------------------------------------
+# Cas relevés en ouvrant à la main les comptes remontés sur « torvalds » le
+# 02/08/2026 : ils existent tous, mais appartiennent à d'autres personnes.
+
+
+def test_nom_declare_etranger_declasse_un_homonyme():
+    """« instagram.com/torvalds » déclare « Marco Migozzi » : ce n'est pas la cible."""
+    homonyme = profil(
+        "1", "torvalds", "Instagram", donnees={"nom_affiche": ["Marco Migozzi"]}
+    )
+    contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[homonyme])
+    resultat = scorer_profil(homonyme, contexte)
+
+    assert any(
+        c.regle == "identite_contradictoire" and c.score_regle < 0
+        for c in resultat.contributions
+    )
+    assert resultat.niveau == NiveauConfiance.FAIBLE
+    assert resultat.score < 40
+
+
+def test_nom_declare_coherent_corrobore_le_compte():
+    """« github.com/torvalds » déclare « Linus Torvalds » : le nom confirme."""
+    cible = profil("1", "torvalds", "GitHub", donnees={"nom_affiche": ["Linus Torvalds"]})
+    contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[cible])
+    resultat = scorer_profil(cible, contexte)
+
+    assert any(
+        c.regle == "identite_contradictoire" and c.score_regle > 0
+        for c in resultat.contributions
+    )
+    assert resultat.score > 60
+
+
+def test_nom_dun_seul_mot_ne_penalise_pas():
+    """« NaraKa » est un pseudonyme d'affichage, pas une identité civile.
+
+    Pénaliser sur cette base écarterait des comptes légitimes dont le propriétaire
+    n'a simplement pas renseigné son vrai nom.
+    """
+    compte = profil("1", "torvalds", "Steam", donnees={"nom_affiche": ["NaraKa"]})
+    contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[compte])
+    resultat = scorer_profil(compte, contexte)
+    assert not any(c.regle == "identite_contradictoire" for c in resultat.contributions)
+
+
+def test_deux_homonymes_au_meme_nom_ne_se_promeuvent_pas_mutuellement():
+    """Deux comptes d'un même tiers ne doivent pas se corroborer l'un l'autre.
+
+    Constaté en conditions réelles : sur « torvalds », Instagram et Pinterest
+    déclarent tous deux « Marco Migozzi ». Traiter cette concordance comme une preuve
+    les faisait passer tous les deux en confiance élevée, alors qu'elle établit
+    exactement l'inverse — un tiers possède ce pseudonyme sur plusieurs plateformes.
+    """
+    a = profil("1", "torvalds", "Instagram", donnees={"nom_affiche": ["Marco Migozzi"]})
+    b = profil("2", "torvalds", "Pinterest", donnees={"nom_affiche": ["Marco Migozzi"]})
+    contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[a, b])
+    resultat = scorer_profil(a, contexte)
+
+    assert any(
+        c.regle == "identite_contradictoire" and c.score_regle < 0
+        for c in resultat.contributions
+    )
+    assert resultat.niveau != NiveauConfiance.ELEVE
+
+
+def test_nom_recopie_du_pseudonyme_ne_compte_pas_comme_signal():
+    """« Torvalds Torvalds » : le site a recopié le nom d'utilisateur dans le champ nom.
+
+    Le compter corroborerait le pseudonyme par lui-même — la même information votant
+    deux fois, assez pour hisser un inconnu en confiance élevée.
+    """
+    compte = profil(
+        "1", "torvalds", "SoundCloud", donnees={"nom_affiche": ["Torvalds Torvalds"]}
+    )
+    contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[compte])
+    resultat = scorer_profil(compte, contexte)
+
+    assert not any(
+        c.regle == "identite_contradictoire" and c.score_regle > 0
+        for c in resultat.contributions
+    )
+    assert resultat.niveau != NiveauConfiance.ELEVE
+
+
+def test_nom_reel_contenant_le_pseudonyme_corrobore():
+    """« Dmitriy (Soxoj) Danilov » contient le pseudonyme : le nom rattache le compte."""
+    cible = profil(
+        "1", "sox0j", "Twitter", donnees={"nom_reel": ["Dmitriy Soxoj Danilov"]}
+    )
+    contexte = ContexteCorrelation(pseudos_reference=["soxoj"], profils=[cible])
+    resultat = scorer_profil(cible, contexte)
+
+    assert any(
+        c.regle == "identite_contradictoire" and c.score_regle > 0
+        for c in resultat.contributions
+    )
+
+
+def test_localisation_isolee_penalise_a_defaut_de_nom():
+    """Le compte Steam « torvalds » se disait en Indonésie, les autres à Portland."""
+    etranger = profil("1", "torvalds", "Steam", donnees={"localisation": ["Indonesia"]})
+    a = profil("2", "torvalds", "GitHub", donnees={"localisation": ["Portland, OR"]})
+    b = profil("3", "torvalds", "Mastodon", donnees={"localisation": ["Portland"]})
+    contexte = ContexteCorrelation(
+        pseudos_reference=["torvalds"], profils=[etranger, a, b]
+    )
+    resultat = scorer_profil(etranger, contexte)
+
+    assert any(
+        c.regle == "identite_contradictoire" and c.score_regle < 0
+        for c in resultat.contributions
+    )
+
+
+def test_localisation_divergente_isolee_ne_penalise_pas():
+    """Un seul autre compte localisé : un déménagement suffit à l'expliquer."""
+    cible = profil("1", "jeanmartin", "GitHub", donnees={"localisation": ["Lyon"]})
+    autre = profil("2", "jeanmartin", "Mastodon", donnees={"localisation": ["Berlin"]})
+    contexte = ContexteCorrelation(pseudos_reference=["jeanmartin"], profils=[cible, autre])
+    resultat = scorer_profil(cible, contexte)
+    assert not any(c.regle == "identite_contradictoire" for c in resultat.contributions)
+
+
+def test_localisation_compatible_ne_penalise_pas():
+    """« Portland » et « Portland, OR » désignent le même lieu."""
+    cible = profil("1", "torvalds", "GitHub", donnees={"localisation": ["Portland, OR"]})
+    a = profil("2", "torvalds", "Mastodon", donnees={"localisation": ["Portland"]})
+    b = profil("3", "torvalds", "Keybase", donnees={"localisation": ["Berlin"]})
+    contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[cible, a, b])
+    resultat = scorer_profil(cible, contexte)
+    assert not any(c.regle == "identite_contradictoire" for c in resultat.contributions)
+
+
+# --- Sites à caractère sexuel ----------------------------------------------
+# Imputer un tel compte à quelqu'un sur la seule foi d'un pseudonyme identique est
+# diffamatoire, et au RGPD un traitement de données de l'article 9 sur un faux
+# positif. Mesuré le 02/08/2026 : « torvalds » remontait OnlyFans, Xvideos et
+# ChaturBate à 65 %, « confiance moyenne ».
+
+
+def test_site_sensible_non_corrobore_reste_en_confiance_faible():
+    compte = profil(
+        "1", "torvalds", "OnlyFans",
+        domaine="onlyfans.com", tags=["porn"],
+    )
+    contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[compte])
+    resultat = scorer_profil(compte, contexte)
+    assert resultat.niveau == NiveauConfiance.FAIBLE
+    assert resultat.score < 40
+
+
+def test_site_sensible_identifie_par_domaine_sans_etiquette():
+    """Fansly ne porte aucune étiquette « porn » dans la base Maigret."""
+    compte = profil("1", "torvalds", "Fansly", domaine="fansly.com", tags=[])
+    contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[compte])
+    assert scorer_profil(compte, contexte).niveau == NiveauConfiance.FAIBLE
+
+
+def test_site_sensible_reellement_corrobore_reste_exploitable():
+    """Un avatar identique et une adresse partagée sont des preuves, pas une homonymie.
+
+    L'outil ne doit pas devenir aveugle à un compte réel : c'est une information
+    d'enquête légitime dès lors qu'elle repose sur autre chose qu'un pseudonyme.
+    """
+    sensible = profil(
+        "1", "jeanmartin", "OnlyFans",
+        domaine="onlyfans.com", tags=["porn"],
+        donnees={
+            "email": ["jean@exemple.fr"],
+            "avatar_phash": ["ff00ff00ff00ff00"],
+        },
+    )
+    connu = profil(
+        "2", "jeanmartin", "GitHub",
+        donnees={
+            "email": ["jean@exemple.fr"],
+            "avatar_phash": ["ff00ff00ff00ff00"],
+        },
+    )
+    contexte = ContexteCorrelation(
+        pseudos_reference=["jeanmartin"], profils=[sensible, connu]
+    )
+    resultat = scorer_profil(sensible, contexte)
+    assert resultat.nb_signaux_positifs >= 2
+    assert resultat.niveau == NiveauConfiance.ELEVE
+
+
+def test_site_ordinaire_nest_pas_affecte_par_le_plafond_sensible():
+    compte = profil("1", "jeanmartin", "GitHub", tags=["coding"])
+    contexte = ContexteCorrelation(pseudos_reference=["jeanmartin"], profils=[compte])
+    assert scorer_profil(compte, contexte).niveau == NiveauConfiance.MOYEN

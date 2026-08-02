@@ -161,6 +161,13 @@ class RegleCorrelation(ABC):
     nom: str = ""
     #: libellé affiché dans l'interface
     libelle: str = ""
+    #: cette règle compte-t-elle comme un signal indépendant pour lever le plafond
+    #: de score (voir `scoreur.PLAFONDS_PAR_NOMBRE_DE_SIGNAUX`) ? À mettre à `False`
+    #: pour un signal corroborant mais non discriminant (ex. cohérence temporelle :
+    #: presque tous les comptes d'un pseudonyme courant passent ce test, y compris
+    #: entre parfaits homonymes ; le laisser compter suffisait à faire passer un
+    #: pseudonyme seul de « confiance moyenne » à « confiance élevée »).
+    compte_pour_plafond: bool = True
 
     def __init__(self, poids: float = 1.0, config: dict[str, Any] | None = None):
         self.poids = poids

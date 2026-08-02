@@ -24,6 +24,7 @@ from app.moteur.pivot.orchestrateur import OrchestrateurPivot
 from app.services.investigation import (
     collecter_donnees_pivotables,
     marquer_donnees_pivotees,
+    pseudos_reference,
     relier_pivot_dans_graphe,
 )
 from app.taches.celery_app import celery_app
@@ -69,9 +70,7 @@ def detecter_et_pivoter(investigation_id: str, profondeur_source: int = 0) -> di
             valeurs_deja_explorees=orchestrateur.valeurs_deja_explorees(),
             # Permet d'écarter les noms affichés qui désignent manifestement
             # quelqu'un d'autre (homonymes sur des faux positifs).
-            pseudos_reference=[
-                investigation.pseudo_initial, *(investigation.variantes or [])
-            ],
+            pseudos_reference=pseudos_reference(session, investigation),
         )
 
         candidates = collecter_donnees_pivotables(session, investigation, score_minimal)

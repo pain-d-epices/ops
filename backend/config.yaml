@@ -47,6 +47,18 @@ correlation:
       poids: 1.5
       seuil_similarite: 0.60
 
+    # Seule règle capable d'écarter un compte : elle pénalise un nom déclaré qui
+    # désigne manifestement quelqu'un d'autre (l'homonymie est le mode d'échec
+    # dominant de la recherche par pseudonyme). Poids élevé, à la hauteur des règles
+    # positives les plus fortes : sans cela, un pseudonyme identique (poids 3.0)
+    # l'emporterait toujours sur la preuve qu'il s'agit d'un inconnu.
+    identite_contradictoire:
+      actif: true
+      poids: 2.5
+      # Nombre de comptes aux localisations toutes différentes de celle-ci avant de
+      # pénaliser une localisation. En deçà, un simple déménagement suffirait.
+      lieux_divergents_minimum: 2
+
     email_partage:
       actif: true
       poids: 3.5

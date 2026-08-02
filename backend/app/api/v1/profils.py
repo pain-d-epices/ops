@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.base import maintenant
 from app.facturation.garde import FonctionnaliteIndisponible, exiger_fonctionnalite
@@ -17,6 +17,8 @@ from app.modeles.investigation import (
     ProfilIdentite,
     SignalCorrelation,
 )
+from app.moteur.correlation.registre import charger_regles
+from app.moteur.correlation.scoreur import SEUIL_SIGNAL_POSITIF
 from app.schemas.investigation import (
     DemandeVerdict,
     DonneeSortie,
@@ -56,7 +58,7 @@ def _profil(ctx: ContexteRequete, investigation_id: str, profil_id: str) -> Prof
     return profil
 
 
-def _resume(profil: ProfilIdentite) -> ProfilResume:
+def _resume(profil: ProfilIdentite, nb_signaux_corroborants: int = 0) -> ProfilResume:
     return ProfilResume(
         id=profil.id,
         site_nom=profil.site_nom,
@@ -69,7 +71,36 @@ def _resume(profil: ProfilIdentite) -> ProfilResume:
         profondeur=profil.profondeur,
         enrichi=profil.enrichi,
         module_utilise=profil.module_utilise,
+        nb_signaux_corroborants=nb_signaux_corroborants,
     )
+
+
+def _compter_signaux_corroborants(
+    ctx: ContexteRequete, profils: list[ProfilIdentite]
+) -> dict[str, int]:
+    """Signaux positifs indépendants par profil, en une seule requête agrégée.
+
+    Même définition que le plafonnement du score (`scoreur`) : seules comptent les
+    règles marquées `compte_pour_plafond`. Sans cela, l'interface replierait des
+    comptes que le moteur considère corroborés, ou l'inverse.
+    """
+    if not profils:
+        return {}
+
+    regles_corroborantes = [r.nom for r in charger_regles() if r.compte_pour_plafond]
+    if not regles_corroborantes:
+        return {}
+
+    lignes = ctx.session.execute(
+        select(SignalCorrelation.profil_id, func.count())
+        .where(
+            SignalCorrelation.profil_id.in_([p.id for p in profils]),
+            SignalCorrelation.regle.in_(regles_corroborantes),
+            SignalCorrelation.score_regle >= SEUIL_SIGNAL_POSITIF,
+        )
+        .group_by(SignalCorrelation.profil_id)
+    )
+    return {profil_id: nombre for profil_id, nombre in lignes}
 
 
 @routeur.get("", response_model=list[ProfilResume])
@@ -102,7 +133,9 @@ def lister_profils(
         "profondeur": ProfilIdentite.profondeur.asc(),
     }
     requete = requete.order_by(colonnes[tri])
-    return [_resume(p) for p in ctx.session.scalars(requete)]
+    profils = list(ctx.session.scalars(requete))
+    corroborations = _compter_signaux_corroborants(ctx, profils)
+    return [_resume(p, corroborations.get(p.id, 0)) for p in profils]
 
 
 @routeur.get("/{profil_id}", response_model=ProfilDetaille)
@@ -124,8 +157,15 @@ def obtenir_profil(
         .order_by(SignalCorrelation.contribution_points.desc())
     ).all()
 
+    corroborants = sum(
+        1
+        for s in signaux
+        if s.score_regle >= SEUIL_SIGNAL_POSITIF
+        and s.regle in {r.nom for r in charger_regles() if r.compte_pour_plafond}
+    )
+
     return ProfilDetaille(
-        **_resume(profil).model_dump(),
+        **_resume(profil, corroborants).model_dump(),
         statut_maigret=profil.statut_maigret,
         decouvert_par_profil_id=profil.decouvert_par_profil_id,
         erreur_enrichissement=profil.erreur_enrichissement,
@@ -184,7 +224,7 @@ def definir_verdict(
     )
     ctx.session.commit()
     ctx.session.refresh(profil)
-    return _resume(profil)
+    return _resume(profil, _compter_signaux_corroborants(ctx, [profil]).get(profil.id, 0))
 
 
 @routeur.post("/{profil_id}/enrichir", status_code=status.HTTP_202_ACCEPTED)

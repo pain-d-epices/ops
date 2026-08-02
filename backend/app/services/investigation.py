@@ -23,11 +23,13 @@ from app.modeles.enums import (
     TypeArete,
     TypeDonnee,
     TypeNoeud,
+    TypePointDepart,
 )
 from app.modeles.investigation import (
     DonneeExtraite,
     ExecutionRecherche,
     Investigation,
+    PointDepart,
     ProfilIdentite,
     SignalCorrelation,
 )
@@ -309,6 +311,46 @@ def _ajouter_donnee(
 # ---------------------------------------------------------------------------
 
 
+def pseudos_reference(session: Session, investigation: Investigation) -> list[str]:
+    """Pseudonymes contre lesquels comparer chaque compte trouvé.
+
+    `investigation.pseudo_initial` n'est le bon pseudonyme de référence que si
+    l'élément principal saisi était lui-même un pseudonyme : sinon (compte, e-mail,
+    téléphone, adresse), il contient la valeur brute — une URL, une adresse — et la
+    comparer à un pseudonyme de compte échoue systématiquement. Mesuré le 02/08/2026 :
+    en partant de « https://github.com/soxoj », le pseudonyme de référence devenait
+    « httpsgithubcomsoxoj », et même le compte GitHub fourni par l'analyste tombait à
+    un score de 0 pour « pseudonyme éloigné ».
+
+    Le pseudonyme réellement pertinent est alors celui qu'un chercheur spécialisé a
+    extrait (partie locale d'une adresse électronique, pseudonyme tiré d'une URL de
+    compte) : il est enregistré comme donnée `pseudo_alt`, sans compte associé
+    (`profil_id` nul).
+    """
+    premier_point = (
+        session.scalars(
+            select(PointDepart)
+            .where(PointDepart.investigation_id == investigation.id)
+            .order_by(PointDepart.created_at)
+            .limit(1)
+        )
+    ).first()
+
+    references = list(investigation.variantes or [])
+    if premier_point is None or premier_point.type == TypePointDepart.PSEUDO.value:
+        references.insert(0, investigation.pseudo_initial)
+    else:
+        decouverts = session.scalars(
+            select(DonneeExtraite.valeur).where(
+                DonneeExtraite.investigation_id == investigation.id,
+                DonneeExtraite.profil_id.is_(None),
+                DonneeExtraite.type == TypeDonnee.PSEUDO_ALT.value,
+            )
+        ).all()
+        references = list(dict.fromkeys([*decouverts, *references]))
+    return references
+
+
 def construire_contexte(session: Session, investigation: Investigation) -> ContexteCorrelation:
     """Assemble la vue mémoire des profils nécessaire au scoring."""
     profils = session.scalars(
@@ -344,7 +386,7 @@ def construire_contexte(session: Session, investigation: Investigation) -> Conte
     ]
 
     return ContexteCorrelation(
-        pseudos_reference=[investigation.pseudo_initial, *(investigation.variantes or [])],
+        pseudos_reference=pseudos_reference(session, investigation),
         profils=evalues,
     )
 
@@ -647,10 +689,9 @@ def marquer_donnees_pivotees(session: Session, identifiants: list[str]) -> None:
 
 
 def detecteur_pour(session: Session, investigation: Investigation, deja_explorees: set[str]) -> DetecteurPivot:
-    del session  # signature homogène avec les autres fabriques du service
     return DetecteurPivot(
         valeurs_deja_explorees=deja_explorees,
-        pseudos_reference=[investigation.pseudo_initial, *(investigation.variantes or [])],
+        pseudos_reference=pseudos_reference(session, investigation),
     )
 
 
