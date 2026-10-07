@@ -68,10 +68,14 @@ export function PageAbonnement() {
   return (
     <div className="pile" style={{ gap: 24 }}>
       <div>
-        <h1>Abonnement</h1>
+        <h1>{abonnement.mode_autoheberge ? "Usage" : "Abonnement"}</h1>
         <p className="attenue">
-          Plan actif : <strong>{abonnement.plan.nom_affiche}</strong>
-          {abonnement.periode_fin && (
+          {abonnement.mode_autoheberge ? (
+            <>Instance autohébergée : aucune limite de volume, aucun abonnement.</>
+          ) : (
+            <>Plan actif : <strong>{abonnement.plan.nom_affiche}</strong></>
+          )}
+          {!abonnement.mode_autoheberge && abonnement.periode_fin && (
             <>
               {" "}
               · {abonnement.renouvellement_automatique ? "renouvellement" : "expiration"} le{" "}
@@ -117,7 +121,8 @@ export function PageAbonnement() {
           </div>
           <p className="attenue" style={{ marginBottom: 14 }}>
             Moyen de paiement, factures, changement de palier ou résiliation : tout se
-            passe sur le portail sécurisé de Stripe, notre prestataire de paiement.
+            passe sur le portail sécurisé de Stripe, prestataire de paiement de cette
+            instance.
           </p>
           <button
             type="button"
@@ -130,6 +135,8 @@ export function PageAbonnement() {
         </div>
       )}
 
+      {/* Un seul palier renvoyé = installation autohébergée : rien à comparer. */}
+      {(plans?.length ?? 0) > 1 && (
       <div>
         <div className="carte-titre">
           <h2>Paliers disponibles</h2>
@@ -146,11 +153,14 @@ export function PageAbonnement() {
           ))}
         </div>
       </div>
+      )}
 
-      <div className="message message-info">
-        Les paiements sont traités par Stripe, qui gère la facturation et la TVA.
-        L'abonnement s'active automatiquement dès la confirmation du paiement.
-      </div>
+      {(plans?.length ?? 0) > 1 && (
+        <div className="message message-info">
+          Les paiements sont traités par Stripe, qui gère la facturation et la TVA.
+          L'abonnement s'active automatiquement dès la confirmation du paiement.
+        </div>
+      )}
     </div>
   );
 }

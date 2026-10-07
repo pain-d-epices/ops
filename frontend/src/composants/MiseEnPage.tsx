@@ -1,12 +1,17 @@
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 
-import { useDeconnexion } from "../api/hooks";
+import { useAbonnement, useDeconnexion } from "../api/hooks";
 import { useAuth } from "../contexts/AuthContext";
 
 export function MiseEnPage({ children }: { children: ReactNode }) {
   const { utilisateur, organisation, changerOrganisation } = useAuth();
+  const { data: abonnement } = useAbonnement();
   const deconnexion = useDeconnexion();
+  // Tant que la réponse n'est pas arrivée, on suppose l'autohébergement : c'est le
+  // mode par défaut, et il vaut mieux ne rien promettre que d'afficher un onglet
+  // commercial qui disparaîtrait une seconde plus tard.
+  const autoheberge = abonnement?.mode_autoheberge ?? true;
   const naviguer = useNavigate();
 
   const seDeconnecter = async () => {
@@ -29,7 +34,7 @@ export function MiseEnPage({ children }: { children: ReactNode }) {
               Investigations
             </NavLink>
             <NavLink to="/abonnement" className={({ isActive }) => (isActive ? "actif" : "")}>
-              Abonnement
+              {autoheberge ? "Usage" : "Abonnement"}
             </NavLink>
             <NavLink to="/organisation" className={({ isActive }) => (isActive ? "actif" : "")}>
               Organisation
@@ -41,7 +46,7 @@ export function MiseEnPage({ children }: { children: ReactNode }) {
         </div>
 
         <div className="zone-compte">
-          {organisation && (
+          {organisation && !autoheberge && (
             <span className="badge badge-accent" title="Plan actif de l'organisation">
               {organisation.plan_nom}
             </span>

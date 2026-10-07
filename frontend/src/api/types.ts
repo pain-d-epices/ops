@@ -326,6 +326,8 @@ export interface Abonnement {
   quotas: Quota[];
   message_limite: string | null;
   plan_superieur: Plan | null;
+  /** Instance autohébergée : ni palier à comparer, ni abonnement à gérer. */
+  mode_autoheberge: boolean;
 }
 
 // --- Événements temps réel --------------------------------------------------

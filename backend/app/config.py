@@ -12,10 +12,16 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 RACINE_BACKEND = Path(__file__).resolve().parent.parent
 RACINE_PROJET = RACINE_BACKEND.parent
+
+#: Clé de signature des jetons utilisée tant qu'aucune n'est fournie. Elle est publique
+#: (ce dépôt est ouvert) : quiconque la connaît peut forger un jeton d'authentification.
+#: Le garde-fou en bas de classe interdit donc de démarrer en production avec elle.
+CLE_SECRETE_DEVELOPPEMENT = "cle_de_developpement_a_ne_jamais_utiliser_en_production"
 
 
 class Parametres(BaseSettings):
@@ -29,8 +35,11 @@ class Parametres(BaseSettings):
     )
 
     # --- Général ---
+    #: Mode autohébergé (par défaut) : l'instance appartient à celui qui l'installe,
+    #: tout est ouvert et la facturation est inerte. Le passer à `false` rétablit les
+    #: paliers payants et les quotas, pour qui veut exploiter l'outil comme un service.
+    mode_autoheberge: bool = True
     environnement: str = "developpement"
-    debug: bool = True
     origines_autorisees: str = "http://localhost:5183"
 
     # --- Base de données ---
@@ -46,11 +55,14 @@ class Parametres(BaseSettings):
     redis_url: str = "redis://localhost:6389/0"
 
     # --- Sécurité ---
-    cle_secrete: str = "cle_de_developpement_a_ne_jamais_utiliser_en_production"
+    cle_secrete: str = CLE_SECRETE_DEVELOPPEMENT
     duree_jeton_acces_minutes: int = 15
     duree_jeton_rafraichissement_jours: int = 14
 
     # --- Stripe (facturation) ---
+    # Inutile en mode autohébergé : laisser vide. Ne sert qu'à qui exploite l'outil
+    # comme un service payant (MODE_AUTOHEBERGE=false). Sans ces valeurs, les routes
+    # de paiement répondent une erreur explicite et le reste fonctionne normalement.
     stripe_cle_secrete: str = ""             # sk_test_... ou sk_live_...
     stripe_webhook_secret: str = ""          # whsec_..., depuis le tableau de bord Stripe
     stripe_url_retour_succes: str = "http://localhost:5183/abonnement?paiement=succes"
@@ -62,6 +74,15 @@ class Parametres(BaseSettings):
     stripe_prix: str = ""
 
     # --- Clés API des modules de site ---
+    # Toutes facultatives, toutes gratuites, et toutes à renseigner dans VOTRE fichier
+    # .env (jamais ici : ce fichier est versionné). Un module sans sa clé s'abstient
+    # simplement, sans faire échouer la recherche.
+    #   GITHUB_TOKEN  github.com/settings/tokens — aucune permission à cocher.
+    #                 Sans lui : 60 requêtes/heure au lieu de 5000. La plus utile.
+    #   REDDIT_*      reddit.com/prefs/apps, application de type « script »
+    #   LASTFM_API_KEY  last.fm/api/account/create
+    #   TWITCH_*      dev.twitch.tv/console/apps
+    # Mode opératoire détaillé : section « Vos clés d'API » du README.
     github_token: str = ""
     reddit_client_id: str = ""
     reddit_client_secret: str = ""
@@ -107,6 +128,38 @@ class Parametres(BaseSettings):
     @property
     def est_production(self) -> bool:
         return self.environnement.lower().startswith("prod")
+
+    @model_validator(mode="after")
+    def _refuser_secrets_de_developpement_en_production(self) -> Parametres:
+        """Interdit de démarrer en production avec les secrets d'exemple du dépôt.
+
+        Volontairement placé ici plutôt que dans `main.py` : l'API, les workers Celery
+        et les scripts d'administration construisent tous ces paramètres, et doivent
+        tous être couverts.
+        """
+        if not self.est_production:
+            return self
+        manquants = []
+        if (
+            self.cle_secrete == CLE_SECRETE_DEVELOPPEMENT
+            or "change_moi" in self.cle_secrete.lower()
+            or len(self.cle_secrete) < 32
+        ):
+            manquants.append("CLE_SECRETE")
+        if not self.url_base_de_donnees and (
+            self.postgres_mot_de_passe == "searcher"
+            or "change_moi" in self.postgres_mot_de_passe.lower()
+        ):
+            manquants.append("POSTGRES_MOT_DE_PASSE")
+        if manquants:
+            raise ValueError(
+                "ENVIRONNEMENT=production mais "
+                + " et ".join(manquants)
+                + " vaut encore une valeur d'exemple du dépôt (publique) ou est trop court. "
+                "Renseigner ces variables dans .env avant de démarrer "
+                '(ex. : python -c "import secrets; print(secrets.token_urlsafe(48))").'
+            )
+        return self
 
 
 class ConfigMetier:

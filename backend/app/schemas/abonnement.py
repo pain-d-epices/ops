@@ -33,6 +33,9 @@ class QuotaSortie(BaseModel):
 
 
 class AbonnementSortie(BaseModel):
+    #: Instance autohébergée : il n'y a ni palier à comparer, ni abonnement à gérer.
+    #: L'interface s'en sert pour ne pas afficher de vocabulaire commercial.
+    mode_autoheberge: bool
     plan: PlanSortie
     statut: str
     periode_debut: datetime | None

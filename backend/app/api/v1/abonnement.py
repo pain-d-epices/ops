@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
+from app.config import parametres
 from app.facturation.abonnements import abonnement_actif
 from app.facturation.quotas import etat_quotas
 from app.modeles.enums import RoleMembre
@@ -48,7 +49,13 @@ def _plan_sortie(plan: Plan, plan_actuel_code: str | None = None) -> PlanSortie:
 
 @routeur.get("/plans", response_model=list[PlanSortie])
 def lister_plans(ctx: ContexteRequete = Depends(contexte_courant)) -> list[PlanSortie]:
-    """Tous les paliers disponibles."""
+    """Paliers proposés à l'organisation.
+
+    En mode autohébergé, seul le palier actif est renvoyé : il n'y a rien à proposer sur
+    une instance personnelle, et proposer des paliers payants y serait absurde.
+    """
+    if parametres().mode_autoheberge:
+        return [_plan_sortie(ctx.plan, ctx.plan.code)]
     plans = ctx.session.scalars(
         select(Plan).where(Plan.actif.is_(True)).order_by(Plan.ordre)
     ).all()
@@ -76,16 +83,22 @@ def etat_abonnement(ctx: ContexteRequete = Depends(contexte_courant)) -> Abonnem
                 )
             break
 
-    superieur = ctx.session.scalar(
-        select(Plan)
-        .where(Plan.actif.is_(True), Plan.ordre > ctx.plan.ordre)
-        .order_by(Plan.ordre)
-        .limit(1)
-    )
+    # Aucun palier supérieur à proposer en autohébergement : le palier « libre » a
+    # l'ordre le plus bas, si bien qu'une recherche naïve y désignerait le palier
+    # gratuit — plus restrictif — comme une montée en gamme.
+    superieur = None
+    if not parametres().mode_autoheberge:
+        superieur = ctx.session.scalar(
+            select(Plan)
+            .where(Plan.actif.is_(True), Plan.ordre > ctx.plan.ordre)
+            .order_by(Plan.ordre)
+            .limit(1)
+        )
 
     return AbonnementSortie(
+        mode_autoheberge=parametres().mode_autoheberge,
         plan=_plan_sortie(ctx.plan, ctx.plan.code),
-        statut=abonnement.statut if abonnement else "gratuit",
+        statut=abonnement.statut if abonnement else "sans_abonnement",
         periode_debut=abonnement.periode_debut if abonnement else None,
         periode_fin=abonnement.periode_fin if abonnement else None,
         renouvellement_automatique=abonnement.renouvellement_automatique if abonnement else False,
@@ -133,7 +146,7 @@ def ouvrir_portail(
     """Ouvre le portail client Stripe : moyen de paiement, factures, annulation.
 
     Stripe héberge cette interface — aucune donnée de paiement ne transite par
-    Searcher, ni avant ni après cet appel.
+    Ops, ni avant ni après cet appel.
     """
     try:
         url = creer_session_portail(ctx.organisation_id, ctx.session)

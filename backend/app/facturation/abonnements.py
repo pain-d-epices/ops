@@ -13,8 +13,9 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.config import parametres
 from app.db.base import maintenant
-from app.facturation.plans import CODE_PLAN_GRATUIT
+from app.facturation.plans import CODE_PLAN_GRATUIT, CODE_PLAN_LIBRE
 from app.modeles.enums import StatutAbonnement
 from app.modeles.facturation import Abonnement, Plan
 from app.modeles.organisation import Organisation
@@ -24,11 +25,18 @@ class PlanIntrouvable(RuntimeError):
     """Les plans n'ont pas été initialisés en base (voir app/scripts/initialiser_plans.py)."""
 
 
-def plan_gratuit(session: Session) -> Plan:
-    plan = session.scalar(select(Plan).where(Plan.code == CODE_PLAN_GRATUIT))
+def plan_par_defaut(session: Session) -> Plan:
+    """Palier d'une organisation sans abonnement payant.
+
+    En mode autohébergé — le cas par défaut — c'est le palier « libre », qui n'impose
+    aucune limite : l'instance appartient à celui qui l'installe. En mode service,
+    c'est le palier gratuit, bridé pour laisser une valeur aux paliers payants.
+    """
+    code = CODE_PLAN_LIBRE if parametres().mode_autoheberge else CODE_PLAN_GRATUIT
+    plan = session.scalar(select(Plan).where(Plan.code == code))
     if plan is None:
         raise PlanIntrouvable(
-            "Le plan gratuit est absent de la base. "
+            f"Le plan « {code} » est absent de la base. "
             "Lancez : python -m app.scripts.initialiser_plans"
         )
     return plan
@@ -69,7 +77,7 @@ def plan_actif(session: Session, organisation_id: str) -> Plan:
     abo = abonnement_actif(session, organisation_id)
     if abo is not None and abo.plan is not None and abo.plan.actif:
         return abo.plan
-    return plan_gratuit(session)
+    return plan_par_defaut(session)
 
 
 def expirer_abonnements_echus(session: Session) -> int:

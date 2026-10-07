@@ -18,6 +18,9 @@ _FICHIER_BASE = Path(tempfile.gettempdir()) / "searcher_tests.db"
 os.environ["URL_BASE_DE_DONNEES"] = f"sqlite:///{_FICHIER_BASE.as_posix()}"
 os.environ["CLE_SECRETE"] = "cle_de_test_uniquement_pour_les_tests_automatises"
 os.environ["ENVIRONNEMENT"] = "test"
+# Les tests valident le mode « service » : paliers payants et quotas actifs. Le mode
+# autohébergé (la valeur par défaut hors tests) a ses propres tests, qui le réactivent.
+os.environ["MODE_AUTOHEBERGE"] = "false"
 os.environ["REDIS_URL"] = "redis://127.0.0.1:6399/0"   # port inutilisé : force le repli hors Redis
 
 from fastapi.testclient import TestClient  # noqa: E402

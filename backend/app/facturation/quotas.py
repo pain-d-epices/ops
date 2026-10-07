@@ -116,7 +116,11 @@ def limite_du_plan(plan: Plan, nom_quota: str) -> int | None:
     _, champ_plan = QUOTAS[nom_quota]
     if champ_plan is None:
         return None
-    return getattr(plan, champ_plan)
+    limite = getattr(plan, champ_plan)
+    # Même convention que `max_sites_analyses` et `max_points_depart` dans plans.py :
+    # 0 vaut « sans limite ». Utilisé par le palier « libre » de l'installation
+    # autohébergée ; aucun palier payant n'a de quota nul.
+    return None if limite == 0 else limite
 
 
 def etat_quotas(session: Session, organisation_id: str, plan: Plan) -> dict[str, EtatQuota]:

@@ -51,6 +51,11 @@ RECHERCHES_SPECIALISEES = [
 
 CODE_PLAN_GRATUIT = "free"
 
+#: Palier attribué à toute organisation en mode autohébergé (`MODE_AUTOHEBERGE=true`,
+#: la valeur par défaut) : rien n'est bridé. Les paliers payants qui suivent ne servent
+#: qu'à celui qui exploiterait l'outil comme un service en ligne.
+CODE_PLAN_LIBRE = "libre"
+
 #: Sens de `max_sites_analyses` et `max_points_depart` : 0 signifie « sans limite ».
 SANS_LIMITE = 0
 
@@ -89,6 +94,32 @@ class DefinitionPlan:
 # corrélation sur un pseudonyme ou une adresse, sans ouvrir ce qui fait la valeur
 # du produit (modules d'enrichissement, rebond, volume, couverture complète).
 PLANS_PAR_DEFAUT: list[DefinitionPlan] = [
+    DefinitionPlan(
+        code=CODE_PLAN_LIBRE,
+        nom_affiche="Libre",
+        description=(
+            "Installation autohébergée : toutes les fonctionnalités, aucun quota. "
+            "Les seules limites qui subsistent sont celles du serveur (config.yaml) "
+            "et celles des sites interrogés."
+        ),
+        prix_mensuel_cents=0,
+        ordre=-1,
+        # 0 = sans limite, comme pour les sites et les points de départ.
+        quota_recherches_mois=SANS_LIMITE,
+        quota_enrichissements_mois=SANS_LIMITE,
+        quota_utilisateurs=SANS_LIMITE,
+        quota_investigations_actives=SANS_LIMITE,
+        profondeur_pivot_max=10,
+        # API_PUBLIQUE reste absent : la fonctionnalité n'existe pas encore (voir son
+        # commentaire plus haut). L'ouvrir ici annoncerait un accès inexistant.
+        fonctionnalites=[
+            MODULES, PIVOT, PIVOT_AUTOMATIQUE, EXPORT_CSV, EXPORT_PDF,
+            RETENTION_ETENDUE, MULTI_UTILISATEURS, SITES_SENSIBLES,
+            RECHERCHE_ETENDUE, *RECHERCHES_SPECIALISEES,
+        ],
+        max_points_depart=SANS_LIMITE,
+        max_sites_analyses=SANS_LIMITE,
+    ),
     DefinitionPlan(
         code=CODE_PLAN_GRATUIT,
         nom_affiche="Gratuit",
