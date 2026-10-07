@@ -19,9 +19,9 @@ Ce point conditionne tout le reste, donc il vient en premier.
 
 | Obstacle | Détail |
 |---|---|
-| **Licence GPL-3.0** | Intégrer ce code dans Searcher contaminerait juridiquement le produit. En SaaS pur (le code n'est jamais distribué), la GPL-3.0 ne force pas la publication — c'est l'AGPL qui couvre ce cas. Mais la position est fragile, et interdit toute installation chez un client. |
+| **Licence GPL-3.0** | Intégrer ce code dans Ops contaminerait juridiquement le produit. En SaaS pur (le code n'est jamais distribué), la GPL-3.0 ne force pas la publication — c'est l'AGPL qui couvre ce cas. Mais la position est fragile, et interdit toute installation chez un client. |
 | **Compte Instagram réel obligatoire** | L'outil se connecte avec de vrais identifiants. Chaque client devrait fournir les siens, ou vous exposeriez les vôtres. |
-| **Violation des conditions d'Instagram** | Le scraping authentifié est explicitement interdit. Bannissement du compte à la clé, et exposition juridique pour vous en tant qu'éditeur. |
+| **Violation des conditions d'Instagram** | Le scraping authentifié est explicitement interdit. Bannissement du compte à la clé, et exposition juridique de qui opère l'instance. |
 | **Fiabilité** | L'outil casse à chaque changement de Meta, ce qui arrive plusieurs fois par an. |
 
 **Ce qui reste possible sur Instagram** : l'API Graph officielle, qui exige un compte
@@ -32,7 +32,7 @@ ayant consenti. Utile pour de la veille de marque, pas pour une investigation.
 
 | Plateforme | Voie légale | Coût | Verdict |
 |---|---|---|---|
-| **X / Twitter** | API officielle v2 | ~200 $/mois (palier Basic) | **Écarté** — outil payant, exclu par consigne du client quel que soit le rapport valeur/prix. |
+| **X / Twitter** | API officielle v2 | ~200 $/mois (palier Basic) | **Écarté** — outil payant : le projet n'en intègre aucun. |
 | **Discord** | API officielle avec jeton de bot | Gratuit | **Réaliste mais limité** — voir ci-dessous |
 | **Instagram** | API Graph (comptes Business uniquement) | Gratuit | Peu utile en investigation |
 | **TikTok** | API Research | Réservée aux chercheurs universitaires | Hors de portée |
@@ -84,13 +84,13 @@ documenter clairement, puisque vous n'êtes pas développeur.
 
 ### Vague C — X / Twitter via l'API officielle : écarté
 
-~200 $/mois, seule voie propre vers X. **Écarté définitivement** : le client refuse
+~200 $/mois, seule voie propre vers X. **Écarté définitivement** : le projet refuse
 tout outil tiers payant, quel que soit le rapport valeur/prix.
 
 ### Ce que je recommande d'écarter
 
 Instagram, Facebook, LinkedIn, TikTok par scraping. Le rapport risque/bénéfice est
-mauvais : bannissements, casse permanente, exposition juridique de l'éditeur.
+mauvais : bannissements, casse permanente, exposition juridique de l'opérateur.
 
 ### Vague D — Outils spécialisés existants, évalués par licence
 
@@ -119,7 +119,7 @@ spécialisés par réseau. Triés par ce qui est réellement intégrable.
 **À trancher avec vous** : GHunt (AGPL) serait le gain de valeur le plus spectaculaire
 sur un simple e-mail Gmail — mais l'AGPL est la licence la plus contraignante qui
 existe pour un service en ligne. L'intégrer tel quel obligerait à publier tout le code
-de Searcher. La seule voie propre serait de réimplémenter son approche (API Google
+de Ops. La seule voie propre serait de réimplémenter son approche (API Google
 publiques, sans le code de GHunt) — un chantier à part entière, pas une simple
 « Vague ».
 
@@ -282,53 +282,32 @@ toucher au reste.
 
 ---
 
-## Répartition par palier
+## Ce qui est accessible, et ce qui coûte cher
 
-**Arrêtée le 30/07/2026** — ce n'est plus une proposition. Les valeurs ci-dessous sont
-celles appliquées par le code (`app/facturation/plans.py`) et verrouillées par un test
-(`test_quotas_et_rebonds_des_quatre_paliers`).
+En autohébergement, tout est ouvert : le découpage en paliers ne s'applique qu'aux
+instances exploitées comme un service (`MODE_AUTOHEBERGE=false`), et les valeurs
+correspondantes vivent dans
+[`app/facturation/plans.py`](../backend/app/facturation/plans.py).
 
-| | Gratuit | Starter | Pro | Entreprise |
-|---|---|---|---|---|
-| **Recherches par mois** | 15 | 100 | 500 | 2500 |
-| **Rebonds (profondeur de pivot)** | ❌ | 2 | 5 | 10 |
-| **Sites par recherche** | 200 | 1000 | tous | tous |
-| Recherche par pseudonyme | ✅ | ✅ | ✅ | ✅ |
-| **Recherche par e-mail** | ✅ | ✅ | ✅ | ✅ |
-| **Recherche par téléphone** | ❌ | ✅ | ✅ | ✅ |
-| **Recherche par adresse** | ❌ | ✅ | ✅ | ✅ |
-| **Démarrer depuis un compte** | ❌ | ✅ | ✅ | ✅ |
-| **Résultats de sites sensibles** | ❌ | ✅ | ✅ | ✅ |
-| Modules d'enrichissement | ❌ | ✅ | ✅ | ✅ |
-| Recherche web et dark web | ❌ | ✅ | ✅ | ✅ |
-| Rebond automatique (sans validation) | ❌ | ❌ | ✅ | ✅ |
-| Points de départ multiples | ❌ | 2 maximum | 5 | illimité |
-| Export CSV | ❌ | ✅ | ✅ | ✅ |
-| Export PDF, rétention étendue | ❌ | ❌ | ✅ | ✅ |
-| Accès API *(non construit)* | ❌ | ❌ | ❌ | à ouvrir au cas par cas |
+Restent trois curseurs qui pèsent réellement sur le coût d'une recherche, et qu'il
+faut avoir en tête quelle que soit l'installation :
 
-Les fuites de données (HIBP) et le connecteur X/Twitter, envisagés pour les paliers
-Pro/Entreprise, sont écartés : outils payants, exclus par consigne du client.
+1. le **volume** de recherches — chacune ouvre des centaines de connexions sortantes ;
+2. la **profondeur de rebond** — chaque niveau multiplie les requêtes ;
+3. le **nombre de sites analysés** par recherche — principal levier sur la durée,
+   environ 0,25 s par site.
 
-### Ce qui structure la grille
+Les plafonds correspondants sont dans
+[`backend/config.yaml`](../backend/config.yaml) : ils protègent les sites interrogés et
+la machine, pas l'usage.
 
-Le palier gratuit sert la **découverte** : il permet de juger la qualité de la
-corrélation sur les deux points de départ les plus courants — un pseudonyme et une
-adresse électronique — sans ouvrir ce qui fait la valeur du produit.
-
-Trois curseurs portent la progression, tous trois directement liés au coût
-d'infrastructure, ce qui rend la montée en gamme défendable auprès du client :
-
-1. le **volume mensuel** de recherches ;
-2. la **profondeur de rebond** — chaque niveau multiplie les requêtes sortantes ;
-3. le **nombre de sites analysés** par recherche — c'est aussi le principal levier
-   sur la durée d'une recherche (0,25 s par site environ).
-
-Les **sites sensibles** (pornographie) sont exclus du palier gratuit. C'est une limite
-commerciale, mais aussi une précaution : un compte de ce type est la donnée la plus
-sensible qu'une investigation puisse révéler, et le palier gratuit n'est soumis à
-aucune vérification d'usage. Détail de l'implémentation dans
+Les **sites sensibles** (pornographie) sont accessibles, mais un compte de ce type
+reste en confiance faible sans corroboration indépendante du pseudonyme : c'est la
+donnée la plus lourde de conséquences qu'une investigation puisse produire. Détail dans
 `app/moteur/sites_sensibles.py`.
+
+Les fuites de données (HIBP) et le connecteur X/Twitter sont écartés : outils payants,
+exclus par principe.
 
 ---
 
@@ -354,17 +333,16 @@ aucune vérification d'usage. Détail de l'implémentation dans
 
 ---
 
-## Décisions qui vous reviennent
+## Décisions ouvertes
 
 1. **`user-scanner`** (test d'existence via les formulaires de récupération, licence
-   MIT) : on l'active ou non ? La question n'est plus juridique (licence propre) mais
-   de principe — c'est une zone grise d'usage, à documenter dans les CGU si retenu.
+   MIT) : à activer ou non. La question n'est plus juridique (licence propre) mais de
+   principe — c'est une zone grise d'usage, à signaler dans le cadre d'utilisation si
+   elle est retenue.
 2. **GHunt** (investigation Gmail/Google, AGPL-3.0) : gain de valeur potentiellement
    très élevé, mais nécessiterait soit d'accepter les obligations AGPL (publier le
-   code de Searcher), soit un chantier de réimplémentation à part entière. À isoler
+   code de Ops), soit un chantier de réimplémentation à part entière. À isoler
    comme décision distincte, pas pour cette feuille de route.
-3. **Répartition par palier** mise à jour ci-dessus : à valider ou corriger.
-
-Tranché : X/Twitter (~200 $/mois) et Have I Been Pwned (~4 $/mois) sont écartés —
-consigne du client de n'utiliser aucun outil tiers payant, quel que soit le rapport
-valeur/prix.
+Tranché : X/Twitter (~200 $/mois) et Have I Been Pwned (~4 $/mois) sont écartés. Le
+projet n'intègre aucun service tiers payant, quel que soit le rapport valeur/prix :
+c'est ce qui garantit qu'une installation reste gratuite à faire tourner.

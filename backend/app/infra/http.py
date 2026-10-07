@@ -37,7 +37,7 @@ class ClientHttp:
         self.tentatives_max = int(conf.get("tentatives_max", 3))
         # Un User-Agent identifiable est une bonne pratique : il permet à un site de
         # nous contacter ou de nous limiter proprement plutôt que de nous bannir.
-        self.user_agent = str(conf.get("user_agent", "SearcherOSINT/0.1"))
+        self.user_agent = str(conf.get("user_agent", "OpsOSINT/0.1"))
         self.entetes_supplementaires = entetes_supplementaires or {}
 
     def _entetes(self, supplementaires: dict[str, str] | None = None) -> dict[str, str]:

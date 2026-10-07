@@ -228,9 +228,9 @@ def test_variantes_de_pseudo_restent_credibles(pseudo_trouve: str, attendu_minim
 
 
 def test_nom_declare_etranger_declasse_un_homonyme():
-    """« instagram.com/torvalds » déclare « Marco Migozzi » : ce n'est pas la cible."""
+    """« instagram.com/torvalds » déclare « Paolo Ferrante » : ce n'est pas la cible."""
     homonyme = profil(
-        "1", "torvalds", "Instagram", donnees={"nom_affiche": ["Marco Migozzi"]}
+        "1", "torvalds", "Instagram", donnees={"nom_affiche": ["Paolo Ferrante"]}
     )
     contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[homonyme])
     resultat = scorer_profil(homonyme, contexte)
@@ -272,12 +272,12 @@ def test_deux_homonymes_au_meme_nom_ne_se_promeuvent_pas_mutuellement():
     """Deux comptes d'un même tiers ne doivent pas se corroborer l'un l'autre.
 
     Constaté en conditions réelles : sur « torvalds », Instagram et Pinterest
-    déclarent tous deux « Marco Migozzi ». Traiter cette concordance comme une preuve
+    déclarent tous deux « Paolo Ferrante ». Traiter cette concordance comme une preuve
     les faisait passer tous les deux en confiance élevée, alors qu'elle établit
     exactement l'inverse — un tiers possède ce pseudonyme sur plusieurs plateformes.
     """
-    a = profil("1", "torvalds", "Instagram", donnees={"nom_affiche": ["Marco Migozzi"]})
-    b = profil("2", "torvalds", "Pinterest", donnees={"nom_affiche": ["Marco Migozzi"]})
+    a = profil("1", "torvalds", "Instagram", donnees={"nom_affiche": ["Paolo Ferrante"]})
+    b = profil("2", "torvalds", "Pinterest", donnees={"nom_affiche": ["Paolo Ferrante"]})
     contexte = ContexteCorrelation(pseudos_reference=["torvalds"], profils=[a, b])
     resultat = scorer_profil(a, contexte)
 

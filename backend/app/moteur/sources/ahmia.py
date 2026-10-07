@@ -8,7 +8,7 @@ index déjà public, au même titre qu'un moteur de recherche classique.
 **Ce module ne se connecte jamais à une adresse .onion.** Il ne fait que lire, en
 HTTPS classique, la page de résultats publiée sur ahmia.fi — aucune connexion Tor
 n'est nécessaire côté serveur, et aucun contenu du dark web n'est téléchargé ni
-consulté par Searcher. Seuls le titre, l'extrait et l'adresse .onion déjà indexés par
+consulté par Ops. Seuls le titre, l'extrait et l'adresse .onion déjà indexés par
 Ahmia sont récupérés.
 
 Ahmia protège sa page de résultats par un jeton anti-robot à usage unique : un champ

@@ -339,12 +339,12 @@ pas voir.
 
 ### 🟠 Précision du rebond : les homonymes déclenchaient des recherches
 
-**Constat.** Parmi les 5 rebonds proposés, `marcomigozzi` — une personne sans aucun
+**Constat.** Parmi les 5 rebonds proposés, `paoloferrante` — une personne sans aucun
 rapport, nom affiché d'un compte homonyme faussement rattaché.
 
 **Correction.** Un nom ne devient un rebond que s'il partage une racine avec ce qui
-est recherché. « Linus Torvalds » et « Patricia Torvalds » restent des pistes
-légitimes ; « Marco Migozzi » est écarté.
+est recherché. « Linus Torvalds » et « Pauline Torvalds » restent des pistes
+légitimes ; « Paolo Ferrante » est écarté.
 
 **Vérifié en réel** : le rebond sans rapport a disparu, les quatre restants portent
 tous sur la cible ou son entourage.

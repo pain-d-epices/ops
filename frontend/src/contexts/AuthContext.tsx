@@ -20,7 +20,7 @@ import {
 import { definirOrganisationActive, useMoi } from "../api/hooks";
 import type { OrganisationResumee, Utilisateur } from "../api/types";
 
-// Clé de stockage local. Renommée avec le produit (Searcher → Ops) : les
+// Clé de stockage local. Renommée avec le produit (Ops → Ops) : les
 // navigateurs qui portent encore l'ancienne clé repartiront simplement sur
 // l'organisation par défaut, sans erreur.
 const CLE_ORGANISATION = "ops.organisation";

@@ -205,7 +205,8 @@ def _verifier_plafond_creation(requete: Request, email: str, session: Session) -
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
             "Trop de comptes ont été créés depuis cette connexion aujourd'hui. "
-            "Réessayez demain, ou contactez-nous si vous équipez une équipe.",
+            "Réessayez demain, ou demandez une invitation à l'administrateur de "
+            "cette instance.",
         )
 
 

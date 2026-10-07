@@ -4,10 +4,10 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ============================================
-echo   Searcher - Arret complet
+echo   Ops - Arret complet
 echo ============================================
 echo.
-echo Fermez d'abord manuellement les fenetres "Searcher - ..." si elles sont
+echo Fermez d'abord manuellement les fenetres "Ops - ..." si elles sont
 echo encore ouvertes (API, worker, interface web), puis appuyez sur une touche
 echo pour arreter PostgreSQL et Redis.
 echo.

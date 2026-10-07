@@ -1,11 +1,11 @@
 # Dépendances tierces et licences
 
-Recensement des bibliothèques utilisées par Searcher, avec leur licence et son
-implication pour une commercialisation en logiciel propriétaire.
+Recensement des bibliothèques utilisées par Ops, avec leur licence et son
+implication pour qui souhaiterait en faire un produit propriétaire.
 
 **Aucune dépendance sous licence copaleft (GPL/AGPL/LGPL) n'est utilisée.** Toutes les
 licences listées ci-dessous (MIT, BSD, Apache 2.0, HPND) autorisent l'usage dans un
-produit commercial fermé, sans obligation de publier le code source de Searcher.
+produit commercial fermé, sans obligation de publier le code source de Ops.
 
 > À mettre à jour à chaque ajout de dépendance. Vérifiez systématiquement la licence
 > **avant** d'intégrer une bibliothèque : une dépendance GPL contraindrait la
@@ -76,7 +76,7 @@ autorisant la liaison depuis un logiciel propriétaire, y compris dans une distr
 binaire. C'est le pilote PostgreSQL de référence en Python et son usage commercial est
 courant et sans ambiguïté.
 
-Cette exception couvre notre usage (installation comme dépendance, sans modification de
+Cette exception couvre l'usage qui en est fait ici (installation comme dépendance, sans modification de
 la bibliothèque). En cas de modification du code source de psycopg lui-même, les
 obligations LGPL s'appliqueraient à la version modifiée : ne modifiez pas cette
 bibliothèque.
@@ -151,7 +151,7 @@ pastilles colorées, sans aucune requête externe.
 **Choix délibéré** : seuls des sites à API publique et documentée sont couverts par un
 module. Les plateformes fermées (X/Twitter, Instagram, Facebook, TikTok) exigent une
 authentification et interdisent le scraping dans leurs conditions d'utilisation ;
-développer un module pour ces sites exposerait l'éditeur à un risque juridique et à des
+développer un module pour ces sites exposerait l'opérateur à un risque juridique et à des
 ruptures de service permanentes.
 
 ---

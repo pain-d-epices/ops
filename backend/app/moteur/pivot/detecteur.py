@@ -216,8 +216,8 @@ class DetecteurPivot:
         # Un nom qui ne partage aucune racine avec ce qu'on recherche désigne
         # vraisemblablement quelqu'un d'autre : c'est le nom affiché d'un compte
         # homonyme, donc d'un faux positif. Mesuré le 01/08/2026 sur « torvalds » :
-        # « Marco Migozzi » déclenchait une recherche complète sans le moindre rapport
-        # avec la cible, là où « Linus Torvalds » et « Patricia Torvalds » étaient
+        # « Paolo Ferrante » déclenchait une recherche complète sans le moindre rapport
+        # avec la cible, là où « Linus Torvalds » et « Pauline Torvalds » étaient
         # deux pistes légitimes.
         if self.pseudos_reference and not any(
             reference in compact or compact in reference

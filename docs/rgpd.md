@@ -1,11 +1,11 @@
 # Conformité RGPD
 
-Searcher traite des **données personnelles de tiers qui n'ont pas consenti à leur
+Ops traite des **données personnelles de tiers qui n'ont pas consenti à leur
 collecte**. C'est le point juridique le plus sensible du produit : il ne se résout pas
 par du code seul.
 
 Ce document décrit ce que l'application met en œuvre techniquement, et ce qui reste à
-votre charge en tant qu'éditeur.
+votre charge en tant qu'opérateur de l'instance.
 
 ---
 
@@ -82,7 +82,7 @@ révélerait l'existence de la ressource.
 
 ## Ce qui reste à votre charge
 
-Ces points ne relèvent pas du code et doivent être traités **avant commercialisation**.
+Ces points ne relèvent pas du code : ils incombent à qui met l'instance en service.
 
 ### 1. Base légale du traitement
 
@@ -100,13 +100,16 @@ C'est un cas typique visé par l'article 35. Faites-la valider par un juriste ou
 
 ### 3. Rôles : responsable de traitement ou sous-traitant
 
-Vos clients définissent les finalités de leurs recherches : ils sont donc responsables
-de traitement, et vous êtes **sous-traitant**. Cela impose :
+Deux situations, selon votre usage :
 
-- un **contrat de sous-traitance** (article 28) signé avec chaque client ;
-- des conditions générales interdisant explicitement les usages illicites, avec
-  possibilité de suspension de compte ;
-- un registre des traitements.
+- **Vous installez l'outil pour vos propres recherches** (le cas courant) : vous
+  définissez les finalités, vous êtes donc **responsable de traitement**. Il vous faut
+  une base légale documentée et un registre des traitements.
+- **Vous ouvrez votre instance à des tiers** qui mènent leurs propres recherches : ils
+  sont responsables de traitement, vous êtes **sous-traitant**. S'y ajoutent un
+  contrat de sous-traitance (article 28) avec chacun, des conditions d'utilisation
+  interdisant explicitement les usages illicites, et la possibilité de suspendre un
+  compte.
 
 ### 4. Information des personnes concernées
 
@@ -116,8 +119,9 @@ est mobilisable, mais elle doit être **justifiée par écrit**, pas simplement 
 
 ### 5. Hébergement
 
-L'architecture est prévue pour un VPS européen (OVH, Scaleway, Hetzner). Maintenir les
-données dans l'UE évite les questions de transfert hors Union et simplifie
+Vous hébergez l'instance : aucune donnée ne transite par un service tiers du projet.
+Sur votre machine, rien à faire de plus. Sur un serveur, un hébergeur européen (OVH,
+Scaleway, Hetzner) évite les questions de transfert hors Union et simplifie
 considérablement le dossier de conformité. Évitez les services cloud américains, même
 pour les sauvegardes.
 

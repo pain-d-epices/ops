@@ -169,7 +169,7 @@ export function PageInscription() {
           {/* Acceptation obligatoire : c'est la trace du consentement au cadre légal,
               exigée avant toute recherche. */}
           <div className="encart-cgu">
-            <strong>Conditions d'utilisation</strong>
+            <strong>Cadre d'utilisation</strong>
             <p style={{ margin: "8px 0 0" }}>
               Ops traite des données personnelles de tiers qui n'ont pas consenti à
               leur collecte. Son utilisation n'est licite que dans un cadre légitime :
@@ -197,8 +197,8 @@ export function PageInscription() {
               required
             />
             <span>
-              J'ai lu et j'accepte les conditions d'utilisation, et je m'engage à
-              n'utiliser cet outil que dans un cadre légal et autorisé.
+              J'ai lu ce cadre d'utilisation et je m'engage à n'utiliser cet outil
+              que dans un cadre légal et autorisé.
             </span>
           </label>
 

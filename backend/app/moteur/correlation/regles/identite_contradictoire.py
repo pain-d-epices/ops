@@ -7,9 +7,9 @@ le score que lui vaut son seul pseudonyme identique.
 Or l'homonymie est le mode d'échec dominant de la recherche par pseudonyme. Vérifié à
 la main le 02/08/2026 sur « torvalds », en ouvrant les comptes remontés : la plupart
 existent réellement, mais appartiennent à d'autres personnes —
-`instagram.com/torvalds` déclare « Marco Migozzi », `untappd.com/torvalds`
-« Torvald Storaas », `fl.ru/torvalds` « Alexandr Torvalds », et le compte Steam
-« WTF Gaming », domicilié en Indonésie. Le moteur disposait de ces noms — les modules
+`instagram.com/torvalds` déclare « Paolo Ferrante », `untappd.com/torvalds`
+« Torvald Nyborg », `fl.ru/torvalds` « Dimitri Torvalds », et le compte Steam
+« Nightfall Gaming », domicilié en Indonésie. Le moteur disposait de ces noms — les modules
 les avaient extraits — et les laissait malgré tout à 65 %, « confiance moyenne ».
 
 Deux signaux, du plus discriminant au plus faible :
@@ -54,7 +54,7 @@ LONGUEUR_MINIMALE_RACINE = 4
 def _partagent_une_racine(a: str, b: str) -> bool:
     """L'une des deux chaînes compactes contient-elle l'autre ?
 
-    « linustorvalds » et « torvalds » partagent une racine ; « marcomigozzi » et
+    « linustorvalds » et « torvalds » partagent une racine ; « paoloferrante » et
     « torvalds » n'en partagent aucune.
     """
     if len(a) < LONGUEUR_MINIMALE_RACINE or len(b) < LONGUEUR_MINIMALE_RACINE:
@@ -119,7 +119,7 @@ class RegleIdentiteContradictoire(RegleCorrelation):
         # Le nom ne rappelle pas le pseudonyme recherché. Il peut malgré tout être
         # déclaré à l'identique sur un autre compte — mais **cela ne le rapproche pas
         # de la cible**. Constaté en conditions réelles le 02/08/2026 : sur
-        # « torvalds », Instagram et Pinterest déclarent tous deux « Marco Migozzi ».
+        # « torvalds », Instagram et Pinterest déclarent tous deux « Paolo Ferrante ».
         # Se corroborer mutuellement les faisait passer tous les deux en confiance
         # élevée, alors que la conclusion correcte est l'inverse — un tiers possède ce
         # pseudonyme sur plusieurs plateformes.

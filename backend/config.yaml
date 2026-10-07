@@ -1,5 +1,5 @@
 # =============================================================================
-#  Configuration métier de Searcher
+#  Configuration métier de Ops
 #  Ce fichier contient les réglages ajustables SANS toucher au code.
 #  Les secrets (mots de passe, clés API) vont dans .env, jamais ici.
 # =============================================================================
@@ -76,7 +76,7 @@ pivot:
   # PLAFOND DUR : aucune organisation, quel que soit son plan, ne peut le dépasser.
   # Protège l'infrastructure d'une explosion combinatoire de requêtes.
   # Aligné sur le palier Entreprise (10 rebonds) : une valeur inférieure écraserait
-  # silencieusement ce que le plan annonce vendre. C'est
+  # silencieusement ce que le plan annonce couvrir. C'est
   # `max_recherches_par_investigation` ci-dessous qui contient réellement le coût,
   # et non la profondeur : à profondeur 10, le nombre de recherches est atteint bien
   # avant le dernier niveau.
@@ -271,7 +271,7 @@ reseau:
   timeout_connexion: 10
   timeout_lecture: 20
   tentatives_max: 3
-  user_agent: "SearcherOSINT/0.1 (+https://exemple.fr/contact ; outil de recherche autorisee)"
+  user_agent: "OpsOSINT/0.1 (+https://exemple.fr/contact ; outil de recherche autorisee)"
 
 # --- Rétention des données (RGPD) -------------------------------------------
 retention:

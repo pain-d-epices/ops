@@ -32,7 +32,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import parametres
 
-EMETTEUR = "Searcher"
+EMETTEUR = "Ops"
 
 
 class TotpRequis(Exception):

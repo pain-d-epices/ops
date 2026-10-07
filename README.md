@@ -1,8 +1,13 @@
-# Searcher — SaaS OSINT de recherche et corrélation de pseudonymes
+# Ops — recherche et corrélation de pseudonymes (OSINT)
 
-Application web multi-clients qui recherche un pseudonyme sur des milliers de sites,
-détermine quels comptes appartiennent réellement à la même personne, en extrait des
-informations exploitables, et restitue l'ensemble sous forme de graphe de relations.
+Application web autohébergée : recherche d'un pseudonyme sur ~3200 sites, corrélation
+des comptes trouvés vers une même personne, enrichissement par API publiques, et
+restitution en graphe de relations avec un score explicable.
+
+Instance locale ou serveur, au choix de l'opérateur : aucun service tiers n'intervient
+dans la chaîne, aucune donnée d'investigation ne sort de l'installation. Sources
+publiques uniquement — ni carnet d'adresses aspiré, ni base de fuites, ni session
+authentifiée sur un site tiers.
 
 > ## ⚠️ Cadre légal d'utilisation
 >
@@ -20,8 +25,9 @@ informations exploitables, et restitue l'ensemble sous forme de graphe de relati
 > certitudes** : ils doivent être vérifiés avant toute exploitation. L'utilisateur est
 > seul responsable de la légalité de son usage.
 >
-> Avant toute mise en service commerciale, faites valider par un juriste votre base
-> légale de traitement (intérêt légitime) et réalisez une analyse d'impact (AIPD).
+> Si vous exploitez cet outil dans un cadre professionnel, faites valider par un
+> juriste votre base légale de traitement (intérêt légitime) et réalisez une analyse
+> d'impact (AIPD) — voir [docs/rgpd.md](docs/rgpd.md).
 
 ---
 
@@ -35,8 +41,8 @@ informations exploitables, et restitue l'ensemble sous forme de graphe de relati
 
 ### Téléphone et adresse : ce qu'on peut en tirer, et ce qu'on ne peut pas
 
-Ces deux recherches ne fonctionnent pas comme celle par pseudonyme, et il faut le dire
-clairement avant de les vendre.
+Ces deux recherches ne fonctionnent pas comme celle par pseudonyme, et la différence
+doit être posée d'emblée.
 
 **Ce qui est structurellement impossible.** `libphonenumber` ne lit que des plages
 d'attribution : pays, région, type de ligne, et opérateur — *uniquement sur mobile*, un
@@ -94,15 +100,16 @@ Quatre garde-fous limitent les faux positifs :
 Vérification manuelle du 02/08/2026, en ouvrant les comptes remontés sur
 « torvalds » : **ils existent presque tous** — 73 % des URL testées renvoient un vrai
 profil consultable. Le problème n'est donc pas que l'outil invente des comptes, mais
-qu'il en trouve **appartenant à d'autres personnes** : `instagram.com/torvalds`
-déclare « Marco Migozzi », `untappd.com/torvalds` « Torvald Storaas », le compte Steam
-« WTF Gaming », domicilié en Indonésie.
+qu'il en trouve **appartenant à d'autres personnes** : sur les trois comptes
+homonymes vérifiés, le profil déclare à chaque fois un nom différent — un nom sans
+rapport, un patronyme voisin, un pseudonyme de joueur — et l'un d'eux est domicilié
+sur un autre continent.
 
 Le moteur exploite désormais ces noms au lieu de les ignorer. Trois précautions, toutes
 tirées de cas réels mesurés :
 
 - deux comptes portant le **même nom étranger** au pseudonyme ne se corroborent pas :
-  Instagram et Pinterest déclaraient tous deux « Marco Migozzi » — c'est l'indice qu'un
+  Instagram et Pinterest déclaraient tous deux « Paolo Ferrante » — c'est l'indice qu'un
   tiers possède ce pseudonyme sur plusieurs plateformes, pas qu'il s'agit de la cible ;
 - un nom **recopié du pseudonyme** par le site (« Torvalds Torvalds » sur SoundCloud)
   ne compte pas : ce serait la même information votant deux fois ;
@@ -121,61 +128,46 @@ noyait les quelques trouvailles utiles et laissait croire à une conclusion.
 
 ---
 
-## Paliers d'abonnement
+## Ce dont dispose une instance
 
-| | Gratuit | Starter | Pro | Entreprise |
-|---|---|---|---|---|
-| Prix mensuel | 0 € | 29 € | 99 € | 299 € |
-| **Recherches / mois** | 10 | 100 | 500 | 2500 |
-| **Rebonds (profondeur de pivot)** | 1 | 2 | 5 | 10 |
-| **Sites analysés par recherche** | 100 | 1000 | tous | tous |
-| Enrichissements / mois | 50 | 500 | 5000 | 50 000 |
-| Utilisateurs | 1 | 3 | 10 | 50 |
-| Recherche par pseudonyme | ✅ | ✅ | ✅ | ✅ |
-| Recherche par e-mail | ✅ | ✅ | ✅ | ✅ |
-| Recherche par téléphone, adresse, compte | ❌ | ✅ | ✅ | ✅ |
-| **Résultats de sites sensibles** | ❌ | ✅ | ✅ | ✅ |
-| Modules par site | ✅ (50/mois) | ✅ | ✅ | ✅ |
-| Recherche web et dark web | ❌ | ✅ | ✅ | ✅ |
-| Éléments de départ par investigation | 1 | 2 | 5 | illimité |
-| Pivot | supervisé (1 niveau) | supervisé | automatique | automatique |
-| Export CSV / PDF | ❌ | CSV | CSV + PDF | CSV + PDF |
+Par défaut (`MODE_AUTOHEBERGE=true`), toute organisation reçoit le palier **« Libre »** :
+aucun quota, aucune fonctionnalité réservée.
 
-> **Accès API : pas construit, et retiré de la grille.** Le code de fonctionnalité
-> (`API_PUBLIQUE`) existe mais rien ne le vérifie — ni clé, ni authentification
-> machine. Il n'est donc plus accordé au palier Entreprise ni affiché sur la page
-> Abonnement : annoncer une fonctionnalité inexistante sur un palier à 299 €/mois est
-> un risque commercial et juridique direct. À rétablir le jour où elle existera.
-> État des lieux et travail restant : [docs/acces-api.md](docs/acces-api.md).
+| | Inclus |
+|---|---|
+| Recherches par mois | sans limite |
+| Sites analysés par recherche | toute la base de Maigret (~3200) |
+| Types de recherche | pseudonyme, adresse électronique, téléphone, adresse postale, compte connu, multi-critères |
+| Rebond (pivot) | jusqu'à 10 niveaux, supervisé ou automatique |
+| Modules d'enrichissement | les 22 modules |
+| Recherche web et dark web | incluse |
+| Résultats de sites sensibles | inclus |
+| Exports | JSON, CSV, PDF |
+| Utilisateurs et organisations | sans limite |
 
-Le palier gratuit sert la **démonstration**. Il incluait auparavant 15 recherches sur
-200 sites, mais ni enrichissement ni rebond — et rendait donc une liste de comptes tous
-notés à l'identique (mesuré le 02/08/2026 : 84 résultats, 82 à 65 %, **aucun** en
-confiance élevée). Il prouvait exactement le contraire de ce que le produit vend. Il
-offre désormais moins de volume mais une chaîne complète : enrichissement des comptes
-trouvés et un niveau de rebond, de quoi juger sur pièces. Même recherche après refonte :
-52 comptes, dont **5 en confiance élevée** et 3 rebonds proposés.
+Les seules bornes restantes sont celles du serveur, dans
+[`backend/config.yaml`](backend/config.yaml) : débit par domaine interrogé, et plafond
+dur de profondeur de rebond. Elles protègent les sites cibles et la machine, pas l'usage.
 
-Ce qui reste payant : le volume, la profondeur au-delà d'un niveau, le rebond
-**automatique** (le gratuit propose, il n'exécute jamais de lui-même), la couverture en
-sites, les types de recherche spécialisés, la recherche web étendue, les exports et les
-sites sensibles.
-
-Les **sites sensibles** (pornographie) sont exclus du palier gratuit : c'est une limite
-commerciale, mais aussi une précaution, ce type de compte étant la donnée la plus
-sensible qu'une investigation puisse révéler. Voir
+Les **sites à caractère sexuel** sont inclus, mais un tel compte reste en **confiance
+faible** tant qu'il ne repose que sur un pseudonyme identique : l'imputer sur cette
+seule base serait diffamatoire, et constituerait un traitement de données de
+l'article 9 fondé sur un faux positif. Voir
 [`backend/app/moteur/sites_sensibles.py`](backend/app/moteur/sites_sensibles.py).
-Sur les paliers payants, un tel compte reste par ailleurs en **confiance faible** tant
-qu'il ne repose que sur un pseudonyme identique : l'imputer à quelqu'un sur cette seule
-base serait diffamatoire, et au RGPD un traitement de données de l'article 9 fondé sur
-un faux positif.
 
-Ces restrictions sont appliquées **côté serveur** (endpoints *et* tâches de fond),
-jamais seulement par masquage d'un bouton.
+> **Accès API machine à machine : pas construit.** Le code de fonctionnalité
+> (`API_PUBLIQUE`) existe mais rien ne le vérifie — ni clé, ni authentification
+> machine. L'API REST s'utilise avec un cookie de session (voir « Utilisation »).
+> État des lieux : [docs/acces-api.md](docs/acces-api.md).
 
-Les quotas se modifient directement en base, sans toucher au code : voir
-[`backend/app/facturation/plans.py`](backend/app/facturation/plans.py) pour les valeurs
-initiales, appliquées par `python -m app.scripts.initialiser_plans`.
+### Ouvrir une instance à des tiers
+
+Le code conserve de sa conception initiale un système de paliers, de quotas et de
+facturation Stripe. Il est inerte en autohébergement. `MODE_AUTOHEBERGE=false` rétablit
+les paliers définis dans
+[`backend/app/facturation/plans.py`](backend/app/facturation/plans.py) ; le branchement
+Stripe est décrit plus bas. Les gardes s'appliquent côté serveur, endpoints **et**
+tâches de fond — jamais par masquage d'un bouton.
 
 ---
 
@@ -183,8 +175,61 @@ initiales, appliquées par `python -m app.scripts.initialiser_plans`.
 
 ### Prérequis
 
-- Docker et Docker Compose (recommandé), **ou** Python 3.11+, PostgreSQL 16 et Redis 7
+- **Docker et Docker Compose** : seule dépendance de l'installation complète
+- ou, pour développer sans conteneuriser l'application : Python 3.11+, Node 20+,
+  PostgreSQL 16 et Redis 7
 - 2 Go de RAM minimum, 4 Go recommandés (Maigret est gourmand pendant les scans)
+
+### Docker : installation complète
+
+La voie recommandée, et la seule qui livre tout d'un bloc — base, cache, API, workers,
+planificateur et interface web. Aucune dépendance Python ou Node à installer sur la
+machine.
+
+```bash
+cp .env.example .env
+python -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+Deux valeurs à renseigner dans `.env`, et rien d'autre :
+
+- `CLE_SECRETE` : la valeur générée ci-dessus. L'application refuse de démarrer en
+  production tant qu'elle vaut celle d'exemple, qui est publique ;
+- `POSTGRES_MOT_DE_PASSE` : au choix, il ne sert qu'entre les conteneurs.
+
+Les clés de Stripe et des modules de site restent vides : elles sont facultatives
+(voir « Clés d'API des modules »).
+
+```bash
+docker compose up -d
+```
+
+Migrations de schéma et initialisation des paliers sont appliquées au démarrage de
+l'API, sans intervention.
+
+| | Adresse |
+|---|---|
+| Interface | http://localhost:8080 |
+| Documentation interactive de l'API | http://localhost:8010/api/docs |
+| Sonde de santé | http://localhost:8010/api/sante |
+
+L'interface relaie elle-même `/api` et `/ws` vers l'API, sur la même origine : un seul
+port à ouvrir, et aucun CORS à configurer. L'API n'est publiée que sur `127.0.0.1`,
+pour consulter sa documentation depuis la machine hôte.
+
+Deux conséquences de cette topologie :
+
+- nginx étant devant l'API, toutes les requêtes lui parviennent avec l'adresse du
+  conteneur. Pour que le plafond par adresse IP et la limitation de débit distinguent
+  les utilisateurs, passez `anti_abus.derriere_un_proxy_de_confiance` à `true` dans
+  [`backend/config.yaml`](backend/config.yaml) — fiable ici, puisque l'API n'est pas
+  joignable directement depuis l'extérieur. Sans objet sur une instance personnelle.
+- `backend/config.yaml` est monté en lecture seule dans les conteneurs : un réglage
+  métier s'applique au redémarrage des services, sans reconstruire les images.
+
+En HTTP, laissez `ENVIRONNEMENT=developpement` : en `production`, les cookies
+d'authentification portent le drapeau `secure` et exigent HTTPS (voir « Instance sur
+serveur »).
 
 ### Démarrage en un clic (développement local sous Windows)
 
@@ -207,35 +252,6 @@ double-cliquez sur **`arreter.bat`** (coupe aussi PostgreSQL et Redis).
 
 Ces deux scripts reproduisent exactement les commandes détaillées ci-dessous ; ils
 supposent que l'installation initiale (prochaine section) a déjà été faite une fois.
-
-### Démarrage avec Docker (recommandé pour un déploiement, pas pour le développement)
-
-```bash
-cp .env.example .env
-```
-
-Puis éditez `.env` — au minimum ces trois valeurs :
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(64))"
-```
-
-- `CLE_SECRETE` : la valeur générée ci-dessus
-- `POSTGRES_MOT_DE_PASSE` : un mot de passe solide
-- `STRIPE_CLE_SECRETE` et `STRIPE_WEBHOOK_SECRET` : voir « Facturation via Stripe »
-  ci-dessous (facultatif pour un premier lancement en local, sans paiement réel)
-
-Puis lancez l'ensemble :
-
-```bash
-docker compose up -d
-```
-
-L'API démarre sur `http://localhost:8010`, applique les migrations et initialise les
-paliers d'abonnement automatiquement.
-
-- Documentation interactive de l'API : http://localhost:8010/api/docs
-- Sonde de santé : http://localhost:8010/api/sante
 
 ### Installation locale (sans Docker, pour le développement)
 
@@ -292,7 +308,7 @@ cd frontend && npm run dev
 ```
 
 L'interface est alors disponible sur http://localhost:5183. Le serveur de
-développement redirige `/api` et `/ws` vers le backend sur le port 8000 : les deux
+développement redirige `/api` et `/ws` vers le backend sur le port 8010 : les deux
 applications partagent la même origine, ce qui permet aux cookies d'authentification
 de circuler sans configuration CORS supplémentaire.
 
@@ -302,7 +318,9 @@ Pour construire la version de production :
 cd frontend && npm run build
 ```
 
-Le résultat est produit dans `frontend/dist`, à servir par Caddy ou Nginx.
+Le résultat est produit dans `frontend/dist`, à servir par n'importe quel serveur
+web. L'installation Docker s'en charge : son image `web` compile l'interface puis la
+sert derrière nginx, qui relaie aussi l'API.
 
 ---
 
@@ -427,9 +445,11 @@ Réglages les plus utiles dans `config.yaml` :
 
 ### Protection contre l'abus
 
-Le palier gratuit offrant 15 recherches par mois, un script qui crée des comptes en
-série obtiendrait un volume illimité. Quatre protections, toutes réglables sous
-`anti_abus` dans `config.yaml`, toutes sans service tiers ni frais :
+Ces protections ne servent que si votre instance est **ouverte sur internet** : elles
+empêchent un inconnu d'y créer des comptes en série pour consommer votre bande passante
+et faire bannir votre adresse IP par les sites interrogés. Sur une instance purement
+locale, elles sont sans objet. Quatre protections, toutes réglables sous `anti_abus`
+dans `config.yaml`, toutes sans service tiers ni frais :
 
 | Protection | Effet | Réglage |
 |---|---|---|
@@ -452,20 +472,30 @@ Deux points d'attention :
 L'ensemble se désactive d'un `anti_abus.actif: false` — utile en développement ou pour
 un script d'amorçage, à ne pas laisser en production.
 
-### Clés API recommandées
+### Clés d'API des modules
 
-- `GITHUB_TOKEN` : fait passer la limite de 60 à 5000 requêtes par heure. Fortement
-  recommandé dès que plusieurs clients utilisent le service.
-- `LASTFM_API_KEY` : gratuite ([last.fm/api/account/create](https://www.last.fm/api/account/create)),
-  sans laquelle le module Last.fm reste simplement inactif.
-- `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` : application gratuite
-  ([dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps)), même principe.
+Toutes facultatives, toutes gratuites, toutes dans le `.env` de l'instance — le dépôt
+n'en contient aucune. Un module privé de sa clé s'abstient sans faire échouer la
+recherche.
+
+| Variable | Source | Effet de son absence |
+|---|---|---|
+| `GITHUB_TOKEN` | [github.com/settings/tokens](https://github.com/settings/tokens), jeton classique sans aucune portée cochée | 60 requêtes/heure au lieu de 5000 — la seule qui compte réellement sur une recherche large |
+| `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps), application de type *script* | Reddit interrogé sans authentification, débit plus faible |
+| `LASTFM_API_KEY` | [last.fm/api/account/create](https://www.last.fm/api/account/create) | module Last.fm inactif |
+| `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` | [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) | module Twitch inactif |
+
+Le `.env` est relu au démarrage : redémarrer l'API et les workers après modification.
+Le journal de démarrage indique le nombre de modules chargés.
 
 ---
 
-## Facturation via Stripe
+## Facturation par Stripe (uniquement si vous ouvrez un service)
 
-Stripe pilote l'abonnement **depuis l'application** : c'est Searcher qui crée la
+> Inutile pour une installation personnelle : en mode autohébergé, rien de cette
+> section n'est à configurer. Elle ne concerne que `MODE_AUTOHEBERGE=false`.
+
+Stripe pilote l'abonnement **depuis l'application** : c'est Ops qui crée la
 session de paiement (Stripe Checkout) et la session de gestion (portail de
 facturation), Stripe se contentant de notifier les changements par webhook. Il gère
 la TVA européenne automatiquement (Stripe Tax).
@@ -498,26 +528,26 @@ fois le paiement effectivement confirmé par Stripe — jamais à l'appel de
 
 ---
 
-## Déploiement sur VPS européen (OVH, Scaleway, Hetzner)
+## Instance sur serveur
 
-Configuration recommandée pour démarrer : **4 vCPU, 8 Go de RAM, 80 Go de disque**
-(environ 20 à 30 €/mois). Le facteur limitant est Maigret, qui ouvre de nombreuses
-connexions simultanées.
+Pertinent pour un accès à distance ou un usage d'équipe ; superflu pour une instance
+locale. Dimensionnement suffisant : **4 vCPU, 8 Go de RAM, 80 Go de disque**. Le facteur
+limitant est Maigret, qui ouvre un grand nombre de connexions simultanées.
 
 ```bash
 # Sur le serveur
-git clone <votre-depot> searcher && cd searcher
-cp .env.example .env    # renseignez les secrets de production
+git clone https://github.com/<votre-compte>/ops.git ops && cd ops
+cp .env.example .env    # renseignez CLE_SECRETE et POSTGRES_MOT_DE_PASSE
 docker compose up -d
 ```
 
-Points à ne pas négliger :
+Exigences de mise en production :
 
 1. **`ENVIRONNEMENT=production`** dans `.env` : active le drapeau `secure` sur les cookies.
 2. **Reverse proxy HTTPS obligatoire** (Caddy ou Nginx). Sans TLS, les cookies d'authentification circulent en clair.
 3. **Ne jamais exposer PostgreSQL ni Redis sur internet** — le `docker-compose.yml` les lie déjà à `127.0.0.1`.
-4. **Sauvegardes** : `docker exec searcher-postgres-1 pg_dump -U searcher searcher | gzip > sauvegarde.sql.gz`
-5. **Hébergement en UE** : maintient les données de clients européens dans l'Union, ce qui simplifie considérablement la conformité RGPD.
+4. **Sauvegardes** : `docker exec ops-postgres-1 pg_dump -U searcher searcher | gzip > sauvegarde.sql.gz` (le nom du conteneur dépend du dossier de clonage : `docker ps` le donne)
+5. **Hébergeur européen** : maintient les données dans l'Union, ce qui simplifie considérablement la conformité RGPD (voir [docs/rgpd.md](docs/rgpd.md)).
 
 Exemple de configuration Caddy (HTTPS automatique) :
 
@@ -546,7 +576,7 @@ Maigret simulé.
 
 Les tests les plus importants à ne jamais laisser échouer :
 
-- `test_isolation_multitenant.py` — une fuite entre clients exposerait les
+- `test_isolation_multitenant.py` — une fuite entre organisations exposerait les
   investigations d'un cabinet à un concurrent ;
 - `test_plans_et_quotas.py` — un contournement permettrait d'utiliser gratuitement les
   fonctionnalités payantes ;
@@ -560,13 +590,13 @@ Les tests les plus importants à ne jamais laisser échouer :
 - [Architecture détaillée](docs/architecture.md) — structure du code, schéma de données, flux d'une investigation
 - [Ajouter un module de site](docs/ajouter-un-module.md) — guide pas à pas
 - [Conformité RGPD](docs/rgpd.md) — rétention, journalisation, droits des personnes
-- [Licences des dépendances](THIRD_PARTY_LICENSES.md) — audit juridique avant mise sur le marché
+- [Licences des dépendances](THIRD_PARTY_LICENSES.md) — toutes permissives (MIT, BSD, Apache)
 
 ---
 
 ## État du projet
 
-**Application complète et vérifiée de bout en bout** (240 tests automatisés, migration
+**Application complète et vérifiée de bout en bout** (245 tests automatisés, migration
 validée sur PostgreSQL 16).
 
 ### Campagne d'évaluation du 02/08/2026
@@ -582,19 +612,19 @@ remontées (code HTTP *et* contenu de la page).
 | 73 % des comptes remontés existent vraiment, mais appartiennent à des **homonymes** ; aucune règle ne savait dire non | Nouvelle règle `identite_contradictoire` (seule règle à score négatif) |
 | Comptes pornographiques présentés à 65 %, « confiance moyenne », sur un simple pseudonyme | Plafonnés en confiance faible sans corroboration indépendante |
 | 119 des 123 résultats affichés au même rang, tous à 65 % | Repliés derrière « *N* comptes au pseudonyme identique, non vérifiés » |
-| Palier gratuit : 84 résultats, 0 en confiance élevée — il démontrait l'inverse de ce qu'il vend | Refondu : moins de volume, mais enrichissement et 1 rebond |
-| « Accès API » vendu au palier Entreprise alors que rien ne l'implémente | Retiré de la grille et de la page Abonnement |
+| Palier par défaut : 84 résultats, aucun en confiance élevée — la corrélation ne se distinguait pas d'une liste brute | Enrichissement et premier niveau de rebond ouverts par défaut |
+| « Accès API » annoncé alors que rien ne l'implémente | Retiré de la grille et de la page Abonnement |
 
 Effet mesuré sur la recherche « torvalds » (500 sites) : la liste exploitable passe de
 **123 comptes indifférenciés à 5**. Les homonymes vérifiés à la main retombent de
-« confiance moyenne » à 23–43 % (Instagram/« Marco Migozzi » 43 %, Steam/« WTF Gaming »
+« confiance moyenne » à 23–43 % (Instagram/« Paolo Ferrante » 43 %, Steam/« Nightfall Gaming »
 23 %), tandis que GitHub et GitHubGist conservent 78 % sur trois signaux réels.
 
 Parcours antérieur, exécuté le 29/07/2026 avec Maigret sur de vrais pseudonymes :
 
 | Étape vérifiée | Résultat observé |
 |---|---|
-| Inscription, acceptation des CGU, session par cookie | ✅ |
+| Inscription, acceptation du cadre légal, session par cookie | ✅ |
 | Recherche « torvalds » sur 50 sites | 26 comptes trouvés, 4 à confiance élevée |
 | Corrélation et plafonnement du score | GitHub 90 %, comptes à signal unique plafonnés à 65 % |
 | Enrichissement GitHub | 7 informations extraites, avatar identifié par hash perceptuel |
@@ -604,27 +634,26 @@ Parcours antérieur, exécuté le 29/07/2026 avec Maigret sur de vrais pseudonym
 | Exports JSON, CSV et PDF | ✅ |
 | Quotas et gating par plan | consommation exacte, options bornées selon le palier |
 | Double authentification (TOTP) | activation, connexion, codes de secours |
-| Paiement Stripe | Checkout, portail client, webhooks (voir « Facturation via Stripe ») |
+| Paiement Stripe (mode service seulement) | Checkout, portail client, webhooks |
 
 Restent à faire :
 
-- envoi des courriels d'invitation (le lien est pour l'instant affiché à l'écran) ;
-- créer le compte Stripe et ses prix en production (le code est prêt, voir
-  « Facturation via Stripe » ci-dessus) ;
-- **volet juridique avant commercialisation** : base légale, AIPD, contrat de
-  sous-traitance client — voir [docs/rgpd.md](docs/rgpd.md).
+- envoi des courriels d'invitation : le lien d'invitation s'affiche à l'écran, il faut
+  le transmettre à la main (aucun serveur de courriel n'est requis pour le reste) ;
+- enrichissement de la couverture des modules (22 sites sur ~3200, voir les limites
+  ci-dessous et [docs/feuille-de-route.md](docs/feuille-de-route.md)).
 
 ### Limites connues, mesurées et non résolues
 
-À garder en tête avant toute démonstration commerciale — ce sont des limites de
-conception, pas des bogues :
+À garder en tête avant d'exploiter un résultat — ce sont des limites de conception,
+pas des bogues :
 
 - **Le score est une moyenne pondérée**, donc un compte à trois signaux peut passer
   *sous* un compte à deux signaux plus francs : sur « torvalds », GitHub (78 %, trois
   signaux dont l'avatar) se classe derrière Snapchat (82 %, deux signaux). Corriger
   suppose de revoir l'agrégation elle-même, pas d'ajouter une règle.
-- **Les homonymes de la même famille sont indétectables** : « Patricia Torvalds » et
-  « Patrick Torvalds » partagent légitimement le patronyme de la cible et remontent
+- **Les homonymes de la même famille sont indétectables** : « Pauline Torvalds » et
+  « Paul Torvalds » partagent légitimement le patronyme de la cible et remontent
   donc en confiance élevée. C'est arguablement le bon comportement — ce sont les
   comptes qu'un analyste doit examiner en premier — mais ce ne sont pas la cible.
 - **Quatre faux positifs structurels de Maigret** subsistent, où la « page de profil »
@@ -637,8 +666,32 @@ conception, pas des bogues :
   moins de 10 % des résultats enrichis sur une recherche large. L'essentiel du corpus
   reste des URL nues.
 
+## Licence
+
+[MIT](LICENSE) : usage, modification et redistribution libres, y compris en contexte
+commercial, mention de copyright conservée. Logiciel fourni sans garantie — la légalité
+de l'usage incombe à l'opérateur de l'instance (voir le cadre légal en tête de fichier).
+
+## Contribuer
+
+Les **modules de site** sont la contribution la plus utile : un fichier d'une centaine
+de lignes, procédure dans [docs/ajouter-un-module.md](docs/ajouter-un-module.md).
+
+```bash
+cd backend && .venv/Scripts/python -m pytest -q && .venv/Scripts/python -m ruff check .
+cd ../frontend && npm run build
+```
+
+Deux exigences non négociables :
+
+- **aucune donnée réelle dans le dépôt** — ni identifiant, ni jeton, ni résultat
+  nominatif, ni capture d'une personne identifiable ; les tests travaillent sur des
+  vecteurs fabriqués ;
+- **sources publiques uniquement** — pas de module exigeant une session authentifiée
+  sur un site tiers, pas de contournement de protection, pas de base de fuites.
+
 ## Crédits
 
-Ce produit s'appuie sur [Maigret](https://github.com/soxoj/maigret) (MIT,
+Ops s'appuie sur [Maigret](https://github.com/soxoj/maigret) (MIT,
 © 2020 Soxoj) pour la recherche de pseudonymes. Voir
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) pour l'ensemble des dépendances.

@@ -76,7 +76,7 @@ def generer_rapport_pdf(
     style_donnee = ParagraphStyle("Donnee", parent=styles["Normal"], fontSize=8)
 
     elements = [
-        Paragraph("Rapport d'investigation Searcher", style_titre),
+        Paragraph("Rapport d'investigation Ops", style_titre),
         Paragraph(
             f"Cible initiale : <b>{_echapper(investigation.pseudo_initial)}</b> — "
             f"organisation {_echapper(organisation_nom)} — "

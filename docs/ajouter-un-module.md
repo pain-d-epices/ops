@@ -1,6 +1,6 @@
 # Ajouter un module de site
 
-Un module apprend à Searcher à extraire des informations d'un site donné. Le système
+Un module apprend à Ops à extraire des informations d'un site donné. Le système
 est conçu pour qu'ajouter un site se limite à **créer un fichier** : aucun
 enregistrement manuel, aucune modification du moteur.
 
@@ -191,7 +191,7 @@ sites vous exposerait à trois problèmes cumulés :
 
 1. bannissement des comptes utilisés pour l'accès ;
 2. rupture de service à chaque changement de leur côté (fréquent, et sans préavis) ;
-3. exposition juridique pour vous en tant qu'éditeur du service.
+3. exposition juridique de qui opère l'instance.
 
 C'est une décision commerciale, pas technique. Les vingt-deux modules couverts
 aujourd'hui (GitHub, GitLab, Codeberg, Gitee, Reddit, Mastodon, Pixelfed, PeerTube,

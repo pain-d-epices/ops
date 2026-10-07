@@ -1,4 +1,4 @@
-"""Point d'entrée de l'API Searcher."""
+"""Point d'entrée de l'API Ops."""
 
 from __future__ import annotations
 
@@ -41,15 +41,15 @@ async def cycle_de_vie(app: FastAPI):
     regles = charger_regles()
     modules = charger_modules()
     journal.info(
-        "Searcher démarré — %d règles de corrélation, %d modules de site, environnement %s",
+        "Ops démarré — %d règles de corrélation, %d modules de site, environnement %s",
         len(regles), len(modules), parametres().environnement,
     )
     yield
-    journal.info("Arrêt de Searcher")
+    journal.info("Arrêt de Ops")
 
 
 app = FastAPI(
-    title="Searcher — API OSINT",
+    title="Ops — API OSINT",
     description=DESCRIPTION,
     version="0.1.0",
     lifespan=cycle_de_vie,

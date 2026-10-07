@@ -199,15 +199,15 @@ def test_un_nom_affiche_en_un_seul_mot_nest_pas_pivotable():
 
 def test_un_nom_sans_rapport_avec_la_cible_est_ecarte():
     """Mesuré le 01/08/2026 : sur une investigation « torvalds », le nom affiché
-    « Marco Migozzi » — porté par un compte homonyme, donc un faux positif —
+    « Paolo Ferrante » — porté par un compte homonyme, donc un faux positif —
     déclenchait une recherche complète sur quelqu'un qui n'a aucun rapport."""
     detecteur = DetecteurPivot(pseudos_reference=["torvalds"])
 
-    assert detecteur.detecter([_candidate(TypeDonnee.NOM_AFFICHE.value, "Marco Migozzi")]) == []
+    assert detecteur.detecter([_candidate(TypeDonnee.NOM_AFFICHE.value, "Paolo Ferrante")]) == []
 
     # Les noms qui partagent la racine recherchée restent, eux, de vraies pistes :
-    # « Patricia Torvalds » est un lien familial, pas un homonyme fortuit.
-    for nom in ("Linus Torvalds", "Patricia Torvalds"):
+    # « Pauline Torvalds » est un lien familial, pas un homonyme fortuit.
+    for nom in ("Linus Torvalds", "Pauline Torvalds"):
         pivots = detecteur.detecter([_candidate(TypeDonnee.NOM_AFFICHE.value, nom)])
         assert len(pivots) == 1, nom
 
@@ -215,7 +215,7 @@ def test_un_nom_sans_rapport_avec_la_cible_est_ecarte():
 def test_sans_reference_le_filtre_de_nom_ne_sapplique_pas():
     """Le filtre ne doit jamais bloquer une investigation dont on ignore la cible."""
     detecteur = DetecteurPivot(pseudos_reference=[])
-    assert len(detecteur.detecter([_candidate(TypeDonnee.NOM_AFFICHE.value, "Marco Migozzi")])) == 1
+    assert len(detecteur.detecter([_candidate(TypeDonnee.NOM_AFFICHE.value, "Paolo Ferrante")])) == 1
 
 
 def test_le_hash_gravatar_nest_plus_pris_pour_une_adresse():

@@ -1,8 +1,8 @@
 """Limitation du débit des requêtes **entrantes**, par adresse IP.
 
 À ne pas confondre avec [`limiteur.py`](limiteur.py), qui fait l'inverse : celui-ci
-protège Searcher de ses propres utilisateurs, l'autre protège les sites interrogés de
-Searcher (pour ne pas faire bannir l'adresse IP du service).
+protège Ops de ses propres utilisateurs, l'autre protège les sites interrogés de
+Ops (pour ne pas faire bannir l'adresse IP du service).
 
 Deux mécanismes complémentaires :
 

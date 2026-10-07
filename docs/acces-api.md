@@ -10,33 +10,26 @@ accordé, mais vérifié nulle part**. Il n'y a :
 - aucune authentification autre que le cookie de session du navigateur ;
 - aucun endpoint qui appelle `exiger_fonctionnalite(plan, API_PUBLIQUE)`.
 
-Concrètement, un client au palier Entreprise ne peut rien faire de plus qu'un autre
-en matière d'accès machine. Ce n'est pas un bogue : la fonctionnalité n'a jamais été
-construite.
+Concrètement, aucune organisation ne peut piloter l'outil autrement que depuis un
+navigateur authentifié par cookie. Ce n'est pas un bogue : la fonctionnalité n'a jamais
+été construite.
 
 ## D'où elle sort
 
-Du **premier commit backend** (`8be7f72`, 27/07/2026, « Socle backend »). Elle faisait
-partie d'une grille tarifaire composée par analogie avec ce qu'on trouve
-habituellement dans un SaaS — accès API pour les paliers hauts — sans avoir été
-demandée ni spécifiée. Elle est restée dans la grille par inertie.
+Du **premier commit backend** (`8be7f72`, 27/07/2026, « Socle backend »), où le projet
+était conçu comme un service en ligne : le code de fonctionnalité a été posé par
+analogie avec les grilles tarifaires habituelles, sans avoir été spécifié, et il y est
+resté par inertie.
 
-**Conséquence à retenir** : ne pas l'afficher comme disponible dans une page de vente
-avant de l'avoir construite. Annoncer un accès API inexistant à un client qui paie
-299 €/mois est un problème contractuel, pas un détail.
-
-## Décision du 30/07/2026
-
-L'accès API est retiré du palier Pro et **réservé au palier Entreprise**. Motif : un
-accès machine à machine est le vecteur le plus direct d'automatisation de masse. Le
-réserver au palier où le client est identifié, contractualisé et accompagné permet de
-l'ouvrir au cas par cas plutôt qu'en libre-service.
+**Conséquence à retenir** : ne pas annoncer cet accès comme disponible avant de l'avoir
+construit. Il n'apparaît donc ni dans la documentation d'installation, ni dans
+l'interface.
 
 ## Ce qu'il faudrait construire
 
 ### 1. Modèle de clé d'API
 
-Une table `cles_api` : identifiant, `organisation_id`, libellé donné par le client,
+Une table `cles_api` : identifiant, `organisation_id`, libellé donné par son porteur,
 empreinte de la clé (jamais la clé en clair — même traitement qu'un mot de passe),
 préfixe visible pour l'identifier dans une liste, date de création, dernière
 utilisation, date de révocation. La clé complète n'est montrée **qu'une fois**, à la
