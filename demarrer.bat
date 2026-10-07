@@ -4,7 +4,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ============================================
-echo   Searcher - Demarrage complet
+echo   Ops - Demarrage complet
 echo ============================================
 echo.
 
@@ -56,8 +56,34 @@ goto attente_postgres
 :postgres_pret
 echo       PostgreSQL est pret.
 
+echo       Mise a jour du schema et des paliers...
+pushd "%~dp0backend"
+set PYTHONIOENCODING=utf-8
+.venv\Scripts\python -m alembic upgrade head >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo ERREUR : la migration de la base a echoue.
+    echo Detail :  cd backend ^&^& .venv\Scripts\python -m alembic upgrade head
+    echo.
+    popd
+    pause
+    exit /b 1
+)
+.venv\Scripts\python -m app.scripts.initialiser_plans >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo ERREUR : l'initialisation des paliers a echoue.
+    echo Detail :  cd backend ^&^& .venv\Scripts\python -m app.scripts.initialiser_plans
+    echo.
+    popd
+    pause
+    exit /b 1
+)
+popd
+echo       Schema et paliers a jour.
+
 echo [3/5] Demarrage de l'API (nouvelle fenetre)...
-start "Searcher - API backend" cmd /k "cd /d "%~dp0backend" && set PYTHONIOENCODING=utf-8 && .venv\Scripts\python -m uvicorn app.main:app --port 8010 --reload"
+start "Ops - API backend" cmd /k "cd /d "%~dp0backend" && set PYTHONIOENCODING=utf-8 && .venv\Scripts\python -m uvicorn app.main:app --port 8010 --reload"
 
 echo       Attente que l'API reponde...
 set /a essais=0
@@ -68,7 +94,7 @@ set /a essais+=1
 if %essais% geq 60 (
     echo.
     echo ATTENTION : l'API n'a pas repondu apres 60 secondes.
-    echo Regardez la fenetre "Searcher - API backend" : elle affiche l'erreur.
+    echo Regardez la fenetre "Ops - API backend" : elle affiche l'erreur.
     echo Le demarrage continue quand meme.
     echo.
     goto api_prete
@@ -79,7 +105,7 @@ goto attente_api
 echo       L'API repond.
 
 echo [4/5] Demarrage de l'interface web (nouvelle fenetre)...
-start "Searcher - Interface web" cmd /k "cd /d "%~dp0frontend" && npm run dev"
+start "Ops - Interface web" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 
 echo       Attente que l'interface reponde...
 set /a essais=0
@@ -90,7 +116,7 @@ set /a essais+=1
 if %essais% geq 90 (
     echo.
     echo ATTENTION : l'interface n'a pas repondu apres 90 secondes.
-    echo Regardez la fenetre "Searcher - Interface web".
+    echo Regardez la fenetre "Ops - Interface web".
     echo.
     goto front_prete
 )
@@ -104,7 +130,7 @@ curl --fail -s -o nul -m 60 http://localhost:5183/src/main.tsx >nul 2>&1
 echo       L'interface est prete.
 
 echo [5/5] Demarrage du worker de taches (nouvelle fenetre)...
-start "Searcher - Worker (recherche, enrichissement, pivot)" cmd /k "cd /d "%~dp0backend" && set PYTHONIOENCODING=utf-8 && .venv\Scripts\python -m celery -A app.taches.celery_app worker -Q recherche,enrichissement,pivot,maintenance --pool=solo --loglevel=info"
+start "Ops - Worker (recherche, enrichissement, pivot)" cmd /k "cd /d "%~dp0backend" && set PYTHONIOENCODING=utf-8 && .venv\Scripts\python -m celery -A app.taches.celery_app worker -Q recherche,enrichissement,pivot,maintenance --pool=solo --loglevel=info"
 
 start "" "http://localhost:5183"
 
@@ -114,7 +140,7 @@ echo   Tout est lance.
 echo ============================================
 echo.
 echo Trois nouvelles fenetres se sont ouvertes : API, interface web, worker.
-echo NE LES FERMEZ PAS pendant que vous utilisez Searcher.
+echo NE LES FERMEZ PAS pendant que vous utilisez Ops.
 echo.
 echo L'interface est utilisable tout de suite. En revanche, le worker charge la
 echo base Maigret : comptez environ deux minutes avant que la PREMIERE recherche

@@ -1,6 +1,10 @@
 # =============================================================================
-#  Searcher — déploiement complet (développement et VPS européen)
-#  Lancement :  docker compose up -d
+#  Ops — installation complète : base, cache, API, workers et interface web.
+#
+#    cp .env.example .env     puis renseigner CLE_SECRETE et POSTGRES_MOT_DE_PASSE
+#    docker compose up -d     interface sur http://localhost:8080
+#
+#  L'interface relaie elle-même les appels d'API : un seul port à ouvrir.
 # =============================================================================
 
 services:
@@ -45,11 +49,17 @@ services:
     env_file: .env
     environment:
       POSTGRES_HOTE: postgres
+      # 5432 et non la valeur du .env : celle-ci désigne le port publié sur l'hôte,
+      # alors qu'à l'intérieur du réseau Docker PostgreSQL écoute sur son port natif.
+      POSTGRES_PORT: 5432
       REDIS_URL: redis://redis:6379/0
     volumes:
       - donnees_investigations:/app/donnees
+      - ./backend/config.yaml:/app/config.yaml:ro
+    # Accessible uniquement depuis la machine hôte, pour inspecter /api/docs.
+    # Le trafic normal passe par le service « web », qui relaie /api et /ws.
     ports:
-      - "8010:8000"
+      - "127.0.0.1:8010:8000"
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -62,9 +72,13 @@ services:
     env_file: .env
     environment:
       POSTGRES_HOTE: postgres
+      # 5432 et non la valeur du .env : celle-ci désigne le port publié sur l'hôte,
+      # alors qu'à l'intérieur du réseau Docker PostgreSQL écoute sur son port natif.
+      POSTGRES_PORT: 5432
       REDIS_URL: redis://redis:6379/0
     volumes:
       - donnees_investigations:/app/donnees
+      - ./backend/config.yaml:/app/config.yaml:ro
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -77,12 +91,26 @@ services:
     env_file: .env
     environment:
       POSTGRES_HOTE: postgres
+      # 5432 et non la valeur du .env : celle-ci désigne le port publié sur l'hôte,
+      # alors qu'à l'intérieur du réseau Docker PostgreSQL écoute sur son port natif.
+      POSTGRES_PORT: 5432
       REDIS_URL: redis://redis:6379/0
     volumes:
       - donnees_investigations:/app/donnees
+      - ./backend/config.yaml:/app/config.yaml:ro
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
+
+  # Interface web : fichiers compilés servis par nginx, qui relaie aussi /api et /ws
+  # vers l'API. Même origine pour tout le monde, donc pas de CORS à configurer.
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
 
   # Planificateur : purge RGPD, remise à zéro des quotas mensuels
   planificateur:
@@ -90,8 +118,13 @@ services:
     restart: unless-stopped
     command: celery -A app.taches.celery_app beat --loglevel=info
     env_file: .env
+    volumes:
+      - ./backend/config.yaml:/app/config.yaml:ro
     environment:
       POSTGRES_HOTE: postgres
+      # 5432 et non la valeur du .env : celle-ci désigne le port publié sur l'hôte,
+      # alors qu'à l'intérieur du réseau Docker PostgreSQL écoute sur son port natif.
+      POSTGRES_PORT: 5432
       REDIS_URL: redis://redis:6379/0
     depends_on:
       redis: {condition: service_healthy}
