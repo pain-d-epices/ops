@@ -1,5 +1,11 @@
 # Ops — recherche et corrélation de pseudonymes (OSINT)
 
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+![React 18](https://img.shields.io/badge/interface-React%2018-blue.svg)
+![Docker Compose](https://img.shields.io/badge/d%C3%A9ploiement-Docker%20Compose-blue.svg)
+![Sources publiques](https://img.shields.io/badge/sources-publiques%20uniquement-lightgrey.svg)
+
 Application web autohébergée : recherche d'un pseudonyme sur ~3200 sites, corrélation
 des comptes trouvés vers une même personne, enrichissement par API publiques, et
 restitution en graphe de relations avec un score explicable.
@@ -335,15 +341,31 @@ curl -X POST http://localhost:8010/api/v1/auth/inscription \
   -c cookies.txt
 ```
 
-L'acceptation des conditions d'utilisation est obligatoire : c'est la trace du
-consentement au cadre légal, exigée avant toute recherche.
+L'acceptation du cadre d'utilisation est obligatoire : c'est la trace du consentement,
+exigée avant toute recherche.
 
-Depuis l'interface, rien de plus n'est demandé. **En ligne de commande, cet appel
-échoue** avec « Épreuve anti-robot absente » : l'inscription exige une preuve de
-calcul que le navigateur résout tout seul (voir
-[Protection contre l'abus](#protection-contre-labus)). Pour créer un compte sans
-navigateur — script d'amorçage, test manuel — passer `anti_abus.actif: false` dans
-`backend/config.yaml`, ou utiliser l'interface.
+Depuis l'interface (http://localhost:8080), rien de plus n'est demandé. **L'appel direct
+ci-dessus échoue** avec « Épreuve anti-robot absente » : l'inscription exige une preuve
+de calcul que le navigateur résout de lui-même (voir
+[Protection contre l'abus](#protection-contre-labus)).
+
+Pour amorcer une installation neuve, ou provisionner un compte sans ouvrir de
+navigateur :
+
+```bash
+docker compose exec api python -m app.scripts.creer_compte \
+  --email vous@exemple.fr --organisation "Mon cabinet" --accepter-cadre-legal
+```
+
+Sans Docker, depuis `backend/` : `.venv/Scripts/python -m app.scripts.creer_compte` avec
+les mêmes options. Le mot de passe est demandé en saisie masquée ; l'option
+`--mot-de-passe` existe pour les scripts, mais laisse le secret dans l'historique du
+terminal. Le compte créé est administrateur de son organisation.
+
+Cette commande court-circuite l'épreuve de calcul et le plafond par adresse IP — et
+seulement eux : politique de mot de passe, unicité de l'adresse et journalisation du
+consentement restent appliquées à l'identique. Il n'y a donc jamais lieu de désactiver
+`anti_abus` pour créer un compte.
 
 ### 2. Lancer une investigation
 
