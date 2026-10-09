@@ -37,6 +37,23 @@ authentifiée sur un site tiers.
 
 ---
 
+**Installation en une commande** : [Docker](#docker--installation-complète), puis
+l'interface sur `http://localhost:8080`.
+
+| | |
+|---|---|
+| [Ce que fait l'outil](#ce-que-fait-loutil) | la chaîne complète, et ce qu'elle ne sait pas faire |
+| [Ce dont dispose une instance](#ce-dont-dispose-une-instance) | aucun quota, aucune fonctionnalité réservée |
+| [Installation](#installation) | Docker, lanceur Windows, ou installation locale |
+| [Utilisation](#utilisation) | créer un compte, lancer et suivre une investigation, exporter |
+| [Configuration](#configuration) | réglages métier, protection contre l'abus, clés d'API |
+| [Instance sur serveur](#instance-sur-serveur) | accès distant, HTTPS, sauvegardes |
+| [Tests](#tests) | 255 tests, ce qu'ils couvrent |
+| [État du projet](#état-du-projet) | mesures de terrain et limites connues |
+| [Contribuer](#contribuer) | ajouter un module de site |
+
+---
+
 ## Ce que fait l'outil
 
 1. **Recherche** — lance [Maigret](https://github.com/soxoj/maigret) sur un pseudonyme et récupère les comptes trouvés, complété par une recherche web ouverte (DuckDuckGo) et une recherche dans l'index public du réseau Tor (Ahmia — jamais de connexion Tor depuis le serveur, voir [`backend/app/moteur/sources/`](backend/app/moteur/sources/)). Une investigation peut aussi partir de plusieurs éléments à la fois : adresse électronique, numéro de téléphone, adresse d'un compte connu, adresse postale. Le type de chaque élément saisi est **deviné automatiquement**, et reste modifiable.
